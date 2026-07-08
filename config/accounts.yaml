@@ -1,0 +1,23 @@
+# Figyelt Instagram fiókok listája (magyar politikusok/pártok).
+#
+# FONTOS: a Business Discovery API csak business/creator típusú
+# Instagram-fiókok NYILVÁNOS posztjait adja vissza, felhasználónév
+# alapján, a SAJÁT business/creator fiókodhoz tartozó access tokennel.
+# Ez a hivatalos, ToS-kompatibilis módja mások posztjainak figyelésére —
+# nincs szükség scraping-re.
+#
+# A prototípus demó/mock módban NEM ezt a listát használja, hanem a
+# src/factcheck/fetch/sample_data.py fájlban lévő fiktív mintaposztokat.
+# Ez a lista a "éles" (Business Discovery API) módhoz kell, amikor
+# valódi fiókokat szeretnél figyelni.
+
+accounts:
+  - username: "pelda_politikus_a"
+    display_name: "Példa Politikus A"
+    note: "Helyettesítsd valós, nyilvános business/creator IG fiókkal."
+  - username: "pelda_politikus_b"
+    display_name: "Példa Politikus B"
+    note: "Helyettesítsd valós, nyilvános business/creator IG fiókkal."
+
+engagement_threshold:
+  min_likes: 500
