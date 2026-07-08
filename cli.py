@@ -22,6 +22,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 from factcheck import config, pipeline  # noqa: E402
 from factcheck.drafting.slide_renderer import render_slides  # noqa: E402
 from factcheck.publish.instagram_publish import publish_draft  # noqa: E402
+from factcheck.retrieval import orchestrator  # noqa: E402
+from factcheck.retrieval.models import RetrievalQuery  # noqa: E402
 from factcheck.review import queue  # noqa: E402
 
 
@@ -117,6 +119,31 @@ def cmd_publish(args: argparse.Namespace) -> None:
     print(result)
 
 
+def cmd_retrieve(args: argparse.Namespace) -> None:
+    """Élő adatlekérés-teszt (Eurostat/KSH) a verification pipeline nélkül."""
+    filters = {}
+    for pair in args.filter or []:
+        key, _, value = pair.partition("=")
+        filters[key] = value
+    query = RetrievalQuery(
+        source=args.source,
+        dataset_code=args.dataset,
+        filters=filters,
+        since_period=args.since,
+    )
+    result = orchestrator.run_query(query)
+    if result.error:
+        print(f"Hiba: {result.error}")
+        return
+    if not result.observations:
+        print("Nincs visszaadott adatpont.")
+        return
+    print(f"{len(result.observations)} adatpont ({args.source}/{args.dataset}):")
+    for obs in result.observations:
+        print(f"  {obs.as_line()}")
+    print(f"\nForrás: {result.observations[0].human_url}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -152,6 +179,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_publish.add_argument("draft_id")
     p_publish.add_argument("--image-url", action="append", default=[])
     p_publish.set_defaults(func=cmd_publish)
+
+    p_retrieve = sub.add_parser("retrieve", help="Élő adatlekérés-teszt (Eurostat/KSH)")
+    p_retrieve.add_argument("--source", default="eurostat", choices=["eurostat", "ksh"])
+    p_retrieve.add_argument("--dataset", required=True, help="pl. une_rt_m")
+    p_retrieve.add_argument("--filter", action="append", help="pl. --filter geo=HU", default=[])
+    p_retrieve.add_argument("--since", default=None, help="pl. 2024-01")
+    p_retrieve.set_defaults(func=cmd_retrieve)
 
     return parser
 

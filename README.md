@@ -16,17 +16,41 @@ teljesen API-kompatibilis és megtartja az emberi minőségbiztosítást.
 
 ```
 fetch (Instagram Business Discovery API / mock minta adatok)
-   -> analysis.claim_extraction  (LLM: ellenőrizhető állítások kinyerése)
-   -> analysis.verification      (LLM: verdikt + forrás-vázlat + bizonyosság)
-   -> drafting.generator         (carousel szöveg-vázlat + caption)
-   -> review.queue               (JSON fájlalapú review-queue: pending/approved/rejected/published)
+   -> analysis.claim_extraction   (LLM: ellenőrizhető állítások kinyerése)
+   -> analysis.verification       retrieval-augmentált tényellenőrzés:
+        1. analysis.retrieval_planner  (LLM: állítás -> strukturált lekérdezések)
+        2. retrieval.orchestrator      (ÉLŐ adatok: Eurostat + KSH API, JSON-stat)
+           + retrieval.websearch       (opcionális Tavily fallback, ha nincs dataset)
+        3. LLM szintézis               (verdikt + források A LEKÉRT ADATOKBÓL)
+   -> drafting.generator          (carousel szöveg-vázlat + caption)
+   -> review.queue                (JSON fájlalapú: pending/approved/rejected/published)
    -> [EMBERI JÓVÁHAGYÁS]
-   -> drafting.slide_renderer    (PNG slide-ok, opcionális, Pillow-val)
-   -> publish.instagram_publish  (Content Publishing API a saját fiókra)
+   -> drafting.slide_renderer     (PNG slide-ok, opcionális, Pillow-val)
+   -> publish.instagram_publish   (Content Publishing API a saját fiókra)
 ```
 
 Minden lépés egy tiszta Python modul (`src/factcheck/`), CLI-n
 (`cli.py`) keresztül vezérelve.
+
+### Retrieval-augmentált tényellenőrzés
+
+A verification már **nem** az LLM emlékezetéből dolgozik. Egy állításra:
+1. az LLM strukturált lekérdezés-tervet ad (melyik Eurostat/KSH dataset,
+   milyen dimenzió-szűrőkkel, milyen időszakra),
+2. a `retrieval` réteg **valódi adatokat** húz le a hivatalos, kulcs
+   nélküli API-król (Eurostat JSON-stat REST; KSH disszemináció),
+3. az LLM már csak ezekből a konkrét, hivatkozható adatpontokból hoz
+   verdiktet - kitalált szám/forrás tiltva.
+
+Az adatlekérés hibatűrő: ha egy API nem elérhető vagy nincs találat, a
+pipeline nem áll meg, a `needs_human_research` flag bekapcsol, és a CLI
+jelzi. Élő lekérés kipróbálása a verification nélkül:
+
+```bash
+python cli.py retrieve --source eurostat --dataset une_rt_m \
+  --filter geo=HU --filter sex=T --filter age=TOTAL \
+  --filter s_adj=SA --filter unit=PC_ACT --since 2024-01
+```
 
 ## Gyors indulás (mock mód, API-kulcs nélkül)
 
@@ -48,31 +72,55 @@ python cli.py publish <draft_id>  # dry-run: kiírja, mit posztolna
 
 Teszt: `PYTHONPATH=src pytest tests/`
 
-## Éles módba kapcsolás
+## Éles módba kapcsolás - milyen API-kulcsok kellenek?
 
-Másold `.env.example` -> `.env`, és töltsd ki:
+Másold `.env.example` -> `.env`. Minden kulcs **opcionális és független**:
+amelyik lépéshez kitöltöd a kulcsot, az éles módra vált, a többi mock/
+dry-run marad. A teljes éles működéshez ezek kellenek:
 
-- **`ANTHROPIC_API_KEY`** - ha be van állítva, a claim-extraction és a
-  verification valódi LLM-hívást használ a mock adatok helyett.
-- **`IG_ACCESS_TOKEN` / `IG_BUSINESS_ACCOUNT_ID`** - a saját
-  business/creator IG fiókodhoz tartozó token. Ezzel a `fetch` a
-  Business Discovery API-t hívja (mások NYILVÁNOS business/creator
-  fiókjainak posztjait lekérve, felhasználónév alapján - ez a
-  hivatalos, ToS-kompatibilis módja a figyelésnek), a `publish` pedig a
-  Content Publishing API-t.
-- Figyelt fiókok: `config/accounts.yaml`.
+| Lépés | Env változó(k) | Kell kulcs? | Honnan |
+|---|---|---|---|
+| **LLM** (állítás-kinyerés, lekérdezés-terv, szintézis) | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | **Igen** | console.anthropic.com -> API Keys |
+| **Eurostat** adatlekérés | — | **Nem** (nyilvános) | csak hálózati elérés az ec.europa.eu-hoz |
+| **KSH** adatlekérés | `KSH_API_BASE` (opcionális felülírás) | **Nem** (nyilvános) | statinfo.ksh.hu / www.ksh.hu/stadat |
+| **Instagram figyelés** (Business Discovery) | `IG_ACCESS_TOKEN`, `IG_BUSINESS_ACCOUNT_ID` | **Igen** | developers.facebook.com (Meta app) |
+| **Instagram publikálás** (Content Publishing) | `IG_ACCESS_TOKEN`, `IG_BUSINESS_ACCOUNT_ID` (+ publikus kép-URL) | **Igen** | ugyanaz a token |
+| **Webkeresés fallback** (opcionális) | `TAVILY_API_KEY` | opcionális | docs.tavily.com |
 
-## Fontos korlátok (tudatosan így lett tervezve)
+**A minimum az igazi tényellenőrzéshez:** `ANTHROPIC_API_KEY`. Ezzel az
+LLM valódi állításokat nyer ki és élő Eurostat/KSH adatból dolgozik
+(a statisztikai API-khoz nem kell külön kulcs). Az Instagram-kulcsok
+csak a figyelés/publikálás automatizálásához kellenek - addig kézzel is
+be lehet táplálni posztot és kézzel posztolni a jóváhagyott draftot.
 
-1. **Nincs élő forráskeresés.** A `verification` modul jelenleg az LLM
-   paraméteres tudására támaszkodik, nem hív web-keresést vagy
-   KSH/Eurostat API-t. Ezért minden éles-módú eredményen
-   `needs_human_research=True` van, és a CLI figyelmeztet rá. Ez a
-   legfontosabb hiányzó darab a valódi éles használathoz - a
-   következő lépés egy retrieval-lépés bekötése (websearch vagy
-   közvetlen KSH/Eurostat/MNB API hívás) lenne, mielőtt bármi
-   elmenne emberi kutató elé.
-2. **Csak a szöveges caption-t elemzi.** Instagram posztok nagy része
+### Instagram token beszerzése (röviden)
+
+1. Meta fejlesztői fiók + app: developers.facebook.com
+2. Az IG fiók legyen **Business** vagy **Creator** típusú, Facebook
+   oldalhoz kötve.
+3. Engedélyek: `instagram_basic`, `instagram_content_publish`,
+   `pages_read_engagement`, `business_management`.
+4. Generálj **long-lived** access tokent, és a saját IG business
+   account ID-t tedd a `.env`-be.
+
+Figyelt fiókok listája: `config/accounts.yaml`.
+
+## Fontos korlátok
+
+1. **A verification élő forráskeresést végez, DE emberi jóváhagyás
+   továbbra is kötelező.** Az LLM strukturált Eurostat/KSH lekérdezést
+   tervez, a rendszer valódi adatot húz le, és az LLM ebből hoz
+   verdiktet. Ettől függetlenül minden éles eredményen bekapcsol a
+   `needs_human_research` flag, ha nem jött vissza adat, hiba volt, vagy
+   a bizonyosság < 0,75 - és a review-queue amúgy is mindig emberi
+   jóváhagyást vár publikálás előtt. A dataset-kód/dimenzió megválasztása
+   LLM-feladat, ezért tévedhet: a lekért adat és a verdikt összhangját
+   embernek kell ellenőriznie.
+2. **A KSH API kevésbé stabil, mint az Eurostaté.** A pontos végpont/
+   dataset-azonosítás változhat; `KSH_API_BASE`-zel felülírható, és hiba
+   esetén a pipeline nem áll meg, csak "nincs adat" jelzést ad. Az
+   Eurostat a megbízhatóbb elsődleges forrás.
+3. **Csak a szöveges caption-t elemzi.** Instagram posztok nagy része
    kép/videó - OCR és multimodális képelemzés még nincs bekötve
    (`Post.image_description` mezőt kézzel/külön lépéssel kell
    feltölteni, ha kép is hordoz állítást).
@@ -92,8 +140,8 @@ Másold `.env.example` -> `.env`, és töltsd ki:
 
 ## Roadmap-ötletek
 
-- Retrieval-lépés a verification elé (web keresés vagy közvetlen
-  KSH/Eurostat/MNB/Magyar Közlöny API-lekérdezések).
+- További strukturált források a retrievalbe: MNB, ÁSZ, Magyar Közlöny
+  (a `retrieval` réteg providerekre bontott, könnyen bővíthető).
 - Kép/videó OCR + multimodális elemzés a caption-only elemzés helyett.
 - Egyszerű webes review-felület a CLI helyett (a `review/queue.py`
   fájlalapú tárolása miatt ez könnyen ráépíthető).
