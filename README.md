@@ -1,104 +1,67 @@
-# Hatékonyságnövelő ötletek – PM részleg (80 fős IT cég)
+# Projektindítás modul (Spring Boot + Angular)
 
-Kiindulópont: már létezik egy saját fejlesztésű alkalmazás, ami a projektek előrehaladását követi.
-Az alábbi ötletek erre építenek, és prioritás szerint vannak csoportosítva
-(**hatás / ráfordítás** arány alapján).
+Egy űrlap kitöltésével egy lépésben létrejön egy új projekthez minden, ami kell:
 
----
+| Rendszer | Mi jön létre | Tagok |
+|---|---|---|
+| **GitLab** | csoport a konfigurált szülőcsoport alatt + egy azonos nevű repo | PM: Owner, tag: Developer, megtekintő: Reporter (a repo örökli a csoporttól) |
+| **Mattermost** | nyilvános vagy privát csatorna a konfigurált csapatban | mindenki bekerül a csapatba és a csatornába; a PM csatorna-admin lesz |
+| **Google Drive** | projektmappa + sablon almappák (pl. Shared Drive-on) | PM és tag: szerkesztő, megtekintő: olvasó |
+| **BookStack** | könyv + „Projekt áttekintés” nyitóoldal (csapattal, linkekkel), opcionálisan polcra téve | „Projekt: &lt;név&gt;” szerepkör, amit minden tag megkap, és ez kap szerkesztési jogot a könyvre |
+| **Syncro** | projekt a projektvezetővel, a tagokkal és az összes fenti linkkel | – |
 
-## 1. Gyors nyerések (1–4 hét, alacsony kockázat)
+![Űrlap](docs/screenshots/urlap.png)
+![Állapot](docs/screenshots/allapot.png)
 
-### 1.1 Automatikus státuszriport-generálás
-- **Probléma:** a PM-ek heti több órát töltenek státuszriportok kézi összeállításával.
-- **Megoldás:** a projektkövető adataiból (+ Jira/GitLab/Azure DevOps commitok, lezárt ticketek) heti automatikus
-  riport, LLM-mel megírt rövid összefoglalóval ("mi készült el, mi csúszik, mi a kockázat").
-- **Kimenet:** e-mail / Teams / Slack üzenet a stakeholdereknek, PDF az ügyfélnek.
-- **Mérőszám:** PM-enként megtakarított óra/hét (reálisan 2–4 óra).
+## Működés
 
-### 1.2 Korai figyelmeztető rendszer (early warning)
-- Szabályalapú riasztások a meglévő adatokból:
-  - burn rate > tervezett (költség vagy óra),
-  - mérföldkő X napon belül, de a hozzá tartozó feladatok < Y%-a kész,
-  - ticket N napja nem mozdult,
-  - egy ember > 100%-ra van allokálva.
-- Egyszerű cron job + értesítés; később ML-alapú csúszás-előrejelzéssé fejleszthető (lásd 3.1).
+- A lépések **a háttérben, sorban** futnak (GitLab → Mattermost → Drive → BookStack → Syncro). Az állapotoldal kétmásodpercenként frissül.
+- **Minden lépés idempotens** („megkeresi, és ha nincs, létrehozza”), így egy hibás lépés újrafuttatása nem hoz létre duplikátumot.
+- Ha egy lépés elbukik (pl. nem érhető el a Drive API), a többi attól még lefut. A hibás lépések egy gombbal **újrafuttathatók**.
+- Ha egy tag nem található valamelyik rendszerben (pl. még nincs GitLab fiókja), az **figyelmeztetés**, nem hiba. Miután a fiók létrejött, az újrafuttatás felveszi.
+- **Utólagos taghozzáadás:** a projekt oldalán új tagok adhatók hozzá. Ilyenkor minden lépés újrafut, és a tagok mindenhova bekerülnek.
+- A Syncro lépés az utolsó, és újrafuttatáskor mindig újrafut, így mindig a friss linkeket kapja meg.
+- A **projektkulcs** (pl. `webshop-megujitas`) a névből generálódik (ékezetek nélkül). Ez lesz a GitLab útvonal és a Mattermost csatornanév. Az űrlap élőben ellenőrzi, hogy foglalt-e.
+- A **személyválasztó** alapból a Mattermost felhasználói között keres, de a Syncro felhasználóira is átköthető.
+- Egy app-újraindítás után a félbemaradt lépések hibásra állnak, így újrafuttathatók. Az el sem indult kérések automatikusan folytatódnak.
+- Minden integráció külön kapcsolható be (`kickoff.<rendszer>.enabled`). Ami ki van kapcsolva, az nem jelenik meg az űrlapon.
 
-### 1.3 Időnaplózás egyszerűsítése
-- Emlékeztető bot (Teams/Slack) a nap végén, egykattintásos óraelszámolással.
-- Javaslat előtöltése a naptár-események és a napi commitok/ticketmozgások alapján.
-- Pontosabb adat → megbízhatóbb projektkontrolling és számlázás.
+## Tartalom
 
-### 1.4 Meeting-összefoglalók és action itemek
-- Teams/Zoom átirat → automatikus jegyzőkönyv, döntések és feladatok kinyerése,
-  a feladatok **automatikus létrehozása** a ticketkezelőben felelőssel és határidővel.
+```
+backend/                      Spring Boot 3 modul (önállóan is buildelhető és tesztelhető)
+  src/main/java/.../projectkickoff/
+    api/                      REST controller, DTO-k, hibakezelés
+    domain/                   JPA entitások, repository
+    service/                  service, háttérfuttató (orchestrator), állapotkezelés
+    integration/              gitlab/ mattermost/ drive/ bookstack/ syncro/ – egy-egy kliens + lépés
+    people/                   személykereső (Mattermost / saját)
+    config/                   konfiguráció (KickoffProperties, KickoffConfig)
+  src/main/resources/application-kickoff.example.yml   példa konfiguráció
+  sql/V1__project_kickoff.postgresql.sql               adatbázis migráció
+frontend/project-kickoff/     Angular (17+) standalone feature: lista, űrlap, állapotoldal
+INTEGRACIO.md                 lépésenkénti útmutató a meglévő projektbe építéshez
+```
 
----
+## Kipróbálás külső rendszerek nélkül (demó mód)
 
-## 2. Közepes projektek (1–3 hónap)
+```bash
+cd backend
+mvn spring-boot:test-run -Dspring-boot.run.profiles=demo   # http://localhost:8080, szimulált integrációkkal
+```
 
-### 2.1 Erőforrás- és kapacitástervező
-- Ki min dolgozik, mennyi szabad kapacitása van a következő 4–12 hétben, milyen skillekkel.
-- Szabadságok (HR-rendszerből) automatikus beolvasása.
-- "Mi lenne, ha" szimuláció: új projekt bevállalásakor látszik, hol lesz szűk keresztmetszet.
-- 80 fős cégnél ez tipikusan a legnagyobb rejtett veszteség (túlterhelt kulcsemberek, alulhasznált kapacitás).
+A demó módban minden lépés kb. 1,5 másodpercig „fut”. A `nincs...@` kezdetű e-mail címekre figyelmeztetés jön. Ha a projekt nevében szerepel a „hiba” szó, a Drive lépés elsőre elbukik, így az újrafuttatás is kipróbálható.
+A frontendet bármelyik Angular appba bemásolva, egy `/api` → `localhost:8080` proxyval lehet mellé futtatni.
 
-### 2.2 Portfólió-dashboard a vezetésnek
-- Egy képernyőn: összes projekt RAG-státusza, marzs, várható bevétel, kockázatok, kapacitás-kihasználtság.
-- Trendek hónapról hónapra; drill-down projektre.
-- Adatforrás: a meglévő projektkövető + pénzügyi/számlázó rendszer.
+## Tesztek
 
-### 2.3 Projektindítás automatizálása (project kickoff pipeline)
-- Egy űrlap kitöltése után automatikusan létrejön: repo, ticketkezelő projekt, Teams csatorna,
-  dokumentációs tér (Confluence/SharePoint), jogosultságok, alap sablonok (kockázati napló, RACI, kommunikációs terv).
-- Projektzáráskor fordítva: archiválás, jogosultság-visszavonás, lessons learned űrlap.
+```bash
+cd backend && mvn test
+```
 
-### 2.4 Változáskérés- és scope-kezelés
-- Change request workflow jóváhagyással, az óra- és költséghatás automatikus becslésével.
-- Csökkenti a "scope creep"-et és a nem számlázott többletmunkát.
+15 teszt fut le:
+- mind az 5 külső kliens tesztje, mockolt HTTP-vel (URL-kódolás, find-or-create, jogosultsági szintek, figyelmeztetések),
+- a teljes folyamat REST-en keresztül, H2 adatbázissal (létrehozás, hiba, újrafuttatás, utólagos tagok, validáció),
+- egy ellenőrzés, hogy a migrációs SQL egyezik az entitásokkal.
 
-### 2.5 Ügyfélportál
-- Az ügyfél saját felületen látja a státuszt, mérföldköveket, nyitott kérdéseket, jóváhagyandó tételeket.
-- Kevesebb "hol tart a projekt?" e-mail és hívás, gyorsabb ügyféljóváhagyások.
-
----
-
-## 3. Stratégiai / AI-alapú fejlesztések (3–6+ hónap)
-
-### 3.1 Csúszás- és kockázat-előrejelzés
-- A lezárt projektek historikus adataiból modell, ami előre jelzi a várható csúszást és túlköltést.
-- Már 20–30 lezárt projekt adata is ad használható jelzést, ha az adatok konzisztensek.
-
-### 3.2 Becslés-támogatás
-- Új ajánlatnál/projektnél a hasonló korábbi projektek tényleges ráfordításai alapján javasolt becslés
-  (és a becslés–tény eltérés statisztikája csapatonként/technológiánként).
-- Pontosabb ajánlatok → jobb marzs.
-
-### 3.3 Belső tudásbázis-asszisztens (RAG)
-- Kérdezhető AI-asszisztens a cég dokumentációin, korábbi projektjein, lessons learned anyagain.
-  ("Csináltunk már SAP-integrációt? Ki dolgozott rajta? Mik voltak a buktatók?")
-- Gyorsabb onboarding, kevesebb ismételt hiba.
-
-### 3.4 Fejlesztési folyamatmetrikák (DORA / flow metrics)
-- Lead time, deployment gyakoriság, átlagos ticket-ciklusidő, review-várakozási idő automatikus mérése.
-- Megmutatja, hol akad el a munka (pl. code review, tesztelés, ügyféljóváhagyás).
-
----
-
-## 4. Javasolt sorrend
-
-| Lépés | Megoldás | Miért először |
-|------|----------|---------------|
-| 1 | Automatikus státuszriport (1.1) | Azonnal érezhető időmegtakarítás, a meglévő adatokra épül |
-| 2 | Early warning riasztások (1.2) | Olcsó, és megelőzi a legdrágább problémákat |
-| 3 | Időnaplózás egyszerűsítése (1.3) | Minden későbbi elemzés adatminőségét javítja |
-| 4 | Kapacitástervező (2.1) | Legnagyobb üzleti hatás egy 80 fős cégnél |
-| 5 | Portfólió-dashboard (2.2) | Vezetői döntéstámogatás |
-| 6 | AI-előrejelzés, becslés (3.1–3.2) | Akkor érdemes, ha már van tiszta historikus adat |
-
-## 5. Általános javaslatok
-- **Először mérj:** a bevezetés előtt rögzítsd a kiinduló értékeket (riportírásra fordított idő, csúszások aránya,
-  kapacitás-kihasználtság), hogy a hatás kimutatható legyen.
-- **Integráció, ne új rendszer:** a meglévő eszközökhöz (Jira, Teams, számlázó) kapcsolódjon, ne kelljen új felületet tanulni.
-- **Egy pilot csapat:** 1–2 projekten próbáld ki, majd skálázd.
-- **Adatvédelem:** LLM-használatnál ügyféladatokra vonatkozó szabályok (GDPR, szerződéses titoktartás) tisztázása,
-  szükség esetén EU-s / on-premise modell.
+A frontend Angular 18 alatt, `strictTemplates`-szel buildelve, és Playwrighttal végigkattintva lett kipróbálva.

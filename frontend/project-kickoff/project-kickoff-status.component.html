@@ -1,0 +1,118 @@
+<section class="kickoff">
+  <header class="kickoff__header">
+    <h1>Projektindítás{{ kickoff() ? ': ' + kickoff()!.name : '' }}</h1>
+    <a routerLink="..">← Vissza a listához</a>
+  </header>
+
+  @if (error()) {
+    <div class="kickoff__alert kickoff__alert--error">{{ error() }}</div>
+  }
+
+  @if (kickoff(); as k) {
+    <div class="kickoff__summary">
+      <span class="kickoff__badge" [attr.data-status]="k.status">{{ statusLabels[k.status] }}</span>
+      <dl>
+        <dt>Kulcs</dt>
+        <dd><code>{{ k.projectKey }}</code></dd>
+        <dt>Projektvezető</dt>
+        <dd>{{ k.projectManagerEmail }}</dd>
+        <dt>Indítva</dt>
+        <dd>{{ k.createdAt | date: 'yyyy.MM.dd. HH:mm' }}{{ k.createdBy ? ' (' + k.createdBy + ')' : '' }}</dd>
+        @if (k.description) {
+          <dt>Leírás</dt>
+          <dd>{{ k.description }}</dd>
+        }
+      </dl>
+    </div>
+
+    <table class="kickoff__steps">
+      <thead>
+        <tr>
+          <th>Rendszer</th>
+          <th>Állapot</th>
+          <th>Link</th>
+          <th>Megjegyzés</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (step of k.steps; track step.id) {
+          <tr [attr.data-status]="step.status">
+            <td>{{ step.label }}</td>
+            <td>
+              <span class="kickoff__badge" [attr.data-status]="step.status">{{ stepLabels[step.status] }}</span>
+              @if (step.attempts > 1) {
+                <small class="kickoff__hint kickoff__attempts">{{ step.attempts }}. próbálkozás</small>
+              }
+            </td>
+            <td>
+              @if (step.url) {
+                <a class="kickoff__link" [href]="step.url" target="_blank" rel="noopener">Megnyitás ↗</a>
+              }
+            </td>
+            <td class="kickoff__message">{{ step.message }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <div class="kickoff__actions">
+      @if (canRetry()) {
+        <button type="button" class="kickoff__btn" (click)="retry()" [disabled]="busy()">
+          Hibás / figyelmeztetéses lépések újrafuttatása
+        </button>
+      }
+      @if (running()) {
+        <span class="kickoff__hint">Folyamatban… az oldal automatikusan frissül.</span>
+      }
+    </div>
+
+    <h2>Csapat</h2>
+    <ul class="kickoff__team">
+      <li>{{ k.projectManagerEmail }} – {{ roleLabels.PROJECT_MANAGER }}</li>
+      @for (m of k.members; track m.email) {
+        <li>{{ m.email }} – {{ roleLabels[m.role] }}</li>
+      }
+    </ul>
+
+    @if (!running()) {
+      <details class="kickoff__add-members">
+        <summary>Tagok hozzáadása utólag</summary>
+        <p class="kickoff__hint">Az új tagok minden rendszerbe bekerülnek (a lépések újrafutnak, a meglévő erőforrások nem duplikálódnak).</p>
+        @for (member of newMembers.controls; track member; let i = $index) {
+          <div class="kickoff__member-row" [formGroup]="member">
+            <input
+              type="email"
+              formControlName="email"
+              list="kickoff-people-status"
+              autocomplete="off"
+              placeholder="nev@ceg.hu"
+              (input)="people.search(member.controls.email.value)"
+            />
+            <select formControlName="role">
+              <option value="MEMBER">Tag</option>
+              <option value="VIEWER">Megtekintő (csak olvasás)</option>
+            </select>
+            <button type="button" class="kickoff__btn kickoff__btn--ghost" (click)="removeMemberRow(i)">✕</button>
+          </div>
+        }
+        <div class="kickoff__paste">
+          <textarea [formControl]="pasteBox" rows="2" placeholder="Több e-mail cím beillesztése…"></textarea>
+          <button type="button" class="kickoff__btn kickoff__btn--secondary" (click)="addPasted()">Beillesztés</button>
+        </div>
+        <div class="kickoff__actions">
+          <button type="button" class="kickoff__btn kickoff__btn--secondary" (click)="addMemberRow()">+ Sor</button>
+          <button type="button" class="kickoff__btn" (click)="submitMembers()" [disabled]="busy() || newMembers.length === 0">
+            Tagok felvétele mindenhova
+          </button>
+        </div>
+        <datalist id="kickoff-people-status">
+          @for (p of people.suggestions(); track p.email) {
+            <option [value]="p.email">{{ p.displayName }}</option>
+          }
+        </datalist>
+      </details>
+    }
+  } @else if (!error()) {
+    <p>Betöltés…</p>
+  }
+</section>

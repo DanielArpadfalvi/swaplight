@@ -1,0 +1,72 @@
+# Projektindítás modul – példa konfiguráció.
+# A meglévő alkalmazás application.yml-jébe kell átmásolni (vagy spring.config.import-tal behúzni).
+# Titkokat ne commitolj: környezeti változókból jöjjenek.
+
+kickoff:
+  worker-threads: 2
+
+  gitlab:
+    enabled: true
+    base-url: https://gitlab.ceg.hu
+    # Admin vagy a szülőcsoportban Owner jogú felhasználó tokenje, "api" scope.
+    # Admin tokennel az e-mail alapú felhasználókeresés a privát címekre is működik.
+    token: ${KICKOFF_GITLAB_TOKEN}
+    # Ez alá jönnek létre a projektcsoportok (üresen: legfelső szint)
+    parent-group-id: 12
+    create-project: true          # a csoportban egy azonos nevű repo is létrejön
+    visibility: private
+    project-manager-access-level: 50   # Owner
+    member-access-level: 30            # Developer
+    viewer-access-level: 20            # Reporter
+
+  mattermost:
+    enabled: true
+    base-url: https://chat.ceg.hu
+    # Bot account token (System Console > Integrations > Bot Accounts).
+    # A botnak kell: create_public_channel, create_private_channel, manage_*_channel_members, add_user_to_team
+    token: ${KICKOFF_MATTERMOST_TOKEN}
+    team-id: abcdefghijklmnopqrstuvwxyz
+    use-person-directory: true    # a személyválasztó a Mattermost felhasználók közt keres
+
+  drive:
+    enabled: true
+    # Google Cloud service account JSON kulcs. A service accountot fel kell venni a Shared Drive-ra
+    # (Content manager), VAGY domain-wide delegationnel impersonate-user nevében dolgozik.
+    credentials-file: /etc/syncro/kickoff-drive-sa.json
+    impersonate-user:
+    parent-folder-id: 0AbCdEfGhIjKlMnOp   # a "Projektek" mappa / Shared Drive azonosítója
+    folder-name-pattern: "{KEY} - {name}"
+    subfolders:
+      - 01 Szerződés és ajánlat
+      - 02 Specifikáció
+      - 03 Meeting jegyzetek
+      - 04 Átadás
+    send-notification-email: false
+
+  bookstack:
+    enabled: true
+    base-url: https://wiki.ceg.hu
+    # Profil > API Tokens. A felhasználónak kell: "Access system API", könyv létrehozás,
+    # szerepkörök és felhasználók kezelése, jogosultságok kezelése.
+    token-id: ${KICKOFF_BOOKSTACK_TOKEN_ID}
+    token-secret: ${KICKOFF_BOOKSTACK_TOKEN_SECRET}
+    shelf-id: 3                   # opcionális "Projektek" polc
+    page-name: Projekt áttekintés
+    create-role: true
+    restrict-to-members: false
+    # page-template: |
+    #   # {name}
+    #   {description}
+    #   **Projektvezető:** {pm}
+    #   ## Csapat
+    #   {members}
+    #   ## Linkek
+    #   {links}
+
+  syncro:
+    enabled: true
+    # Ha a modul a Syncro-ba épül: base-url NE legyen megadva, helyette implementáld a SyncroGateway interfészt.
+    # Ha külön alkalmazás: a Syncro upsert végpontja (PUT {base-url}{path}/{projectKey}).
+    # base-url: https://syncro.ceg.hu
+    # path: /api/projects/kickoff
+    # token: ${KICKOFF_SYNCRO_TOKEN}
