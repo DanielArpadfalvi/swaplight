@@ -1,151 +1,104 @@
-# Instagram politikai tényellenőrző - prototípus
+# Hatékonyságnövelő ötletek – PM részleg (80 fős IT cég)
 
-Fél-automatizált, **ember-a-hurokban** tényellenőrző pipeline: népszerű
-posztokban (magyar politikusok kommunikációjában) megjelenő ellenőrizhető
-állításokat gyűjt ki, próbál rájuk verdiktet és forrást találni, majd
-egy Instagram carousel-vázlatot (szöveg + forráslista) generál a
-**saját** fiókodra. Semmi nem jut publikálásig emberi jóváhagyás nélkül.
+Kiindulópont: már létezik egy saját fejlesztésű alkalmazás, ami a projektek előrehaladását követi.
+Az alábbi ötletek erre építenek, és prioritás szerint vannak csoportosítva
+(**hatás / ráfordítás** arány alapján).
 
-Ez a döntés (saját tartalom, nem másokéra kommentelés) egy korábbi
-beszélgetés eredménye: az Instagram API nem teszi lehetővé idegen posztok
-alá automatizált kommentelést, a scraping-alapú megoldás pedig
-ToS-sértő és bannolási kockázatot jelent. A saját posztos formátum
-teljesen API-kompatibilis és megtartja az emberi minőségbiztosítást.
+---
 
-## Architektúra
+## 1. Gyors nyerések (1–4 hét, alacsony kockázat)
 
-```
-fetch (Instagram Business Discovery API / mock minta adatok)
-   -> analysis.claim_extraction   (LLM: ellenőrizhető állítások kinyerése)
-   -> analysis.verification       retrieval-augmentált tényellenőrzés:
-        1. analysis.retrieval_planner  (LLM: állítás -> strukturált lekérdezések)
-        2. retrieval.orchestrator      (ÉLŐ adatok: Eurostat + KSH API, JSON-stat)
-           + retrieval.websearch       (opcionális Tavily fallback, ha nincs dataset)
-        3. LLM szintézis               (verdikt + források A LEKÉRT ADATOKBÓL)
-   -> drafting.generator          (carousel szöveg-vázlat + caption)
-   -> review.queue                (JSON fájlalapú: pending/approved/rejected/published)
-   -> [EMBERI JÓVÁHAGYÁS]
-   -> drafting.slide_renderer     (PNG slide-ok, opcionális, Pillow-val)
-   -> publish.instagram_publish   (Content Publishing API a saját fiókra)
-```
+### 1.1 Automatikus státuszriport-generálás
+- **Probléma:** a PM-ek heti több órát töltenek státuszriportok kézi összeállításával.
+- **Megoldás:** a projektkövető adataiból (+ Jira/GitLab/Azure DevOps commitok, lezárt ticketek) heti automatikus
+  riport, LLM-mel megírt rövid összefoglalóval ("mi készült el, mi csúszik, mi a kockázat").
+- **Kimenet:** e-mail / Teams / Slack üzenet a stakeholdereknek, PDF az ügyfélnek.
+- **Mérőszám:** PM-enként megtakarított óra/hét (reálisan 2–4 óra).
 
-Minden lépés egy tiszta Python modul (`src/factcheck/`), CLI-n
-(`cli.py`) keresztül vezérelve.
+### 1.2 Korai figyelmeztető rendszer (early warning)
+- Szabályalapú riasztások a meglévő adatokból:
+  - burn rate > tervezett (költség vagy óra),
+  - mérföldkő X napon belül, de a hozzá tartozó feladatok < Y%-a kész,
+  - ticket N napja nem mozdult,
+  - egy ember > 100%-ra van allokálva.
+- Egyszerű cron job + értesítés; később ML-alapú csúszás-előrejelzéssé fejleszthető (lásd 3.1).
 
-### Retrieval-augmentált tényellenőrzés
+### 1.3 Időnaplózás egyszerűsítése
+- Emlékeztető bot (Teams/Slack) a nap végén, egykattintásos óraelszámolással.
+- Javaslat előtöltése a naptár-események és a napi commitok/ticketmozgások alapján.
+- Pontosabb adat → megbízhatóbb projektkontrolling és számlázás.
 
-A verification már **nem** az LLM emlékezetéből dolgozik. Egy állításra:
-1. az LLM strukturált lekérdezés-tervet ad (melyik Eurostat/KSH dataset,
-   milyen dimenzió-szűrőkkel, milyen időszakra),
-2. a `retrieval` réteg **valódi adatokat** húz le a hivatalos, kulcs
-   nélküli API-król (Eurostat JSON-stat REST; KSH disszemináció),
-3. az LLM már csak ezekből a konkrét, hivatkozható adatpontokból hoz
-   verdiktet - kitalált szám/forrás tiltva.
+### 1.4 Meeting-összefoglalók és action itemek
+- Teams/Zoom átirat → automatikus jegyzőkönyv, döntések és feladatok kinyerése,
+  a feladatok **automatikus létrehozása** a ticketkezelőben felelőssel és határidővel.
 
-Az adatlekérés hibatűrő: ha egy API nem elérhető vagy nincs találat, a
-pipeline nem áll meg, a `needs_human_research` flag bekapcsol, és a CLI
-jelzi. Élő lekérés kipróbálása a verification nélkül:
+---
 
-```bash
-python cli.py retrieve --source eurostat --dataset une_rt_m \
-  --filter geo=HU --filter sex=T --filter age=TOTAL \
-  --filter s_adj=SA --filter unit=PC_ACT --since 2024-01
-```
+## 2. Közepes projektek (1–3 hónap)
 
-## Gyors indulás (mock mód, API-kulcs nélkül)
+### 2.1 Erőforrás- és kapacitástervező
+- Ki min dolgozik, mennyi szabad kapacitása van a következő 4–12 hétben, milyen skillekkel.
+- Szabadságok (HR-rendszerből) automatikus beolvasása.
+- "Mi lenne, ha" szimuláció: új projekt bevállalásakor látszik, hol lesz szűk keresztmetszet.
+- 80 fős cégnél ez tipikusan a legnagyobb rejtett veszteség (túlterhelt kulcsemberek, alulhasznált kapacitás).
 
-A prototípus alapból **mock módban** fut: nincs szükség Instagram vagy
-Anthropic API-kulcsra, fiktív minta posztokkal és előre elkészített
-"LLM-kimenetekkel" dolgozik (`src/factcheck/fetch/sample_data.py`),
-hogy végig lehessen kísérni a teljes folyamatot.
+### 2.2 Portfólió-dashboard a vezetésnek
+- Egy képernyőn: összes projekt RAG-státusza, marzs, várható bevétel, kockázatok, kapacitás-kihasználtság.
+- Trendek hónapról hónapra; drill-down projektre.
+- Adatforrás: a meglévő projektkövető + pénzügyi/számlázó rendszer.
 
-```bash
-pip install -r requirements.txt   # yaml, requests kellenek; Pillow/anthropic opcionális
+### 2.3 Projektindítás automatizálása (project kickoff pipeline)
+- Egy űrlap kitöltése után automatikusan létrejön: repo, ticketkezelő projekt, Teams csatorna,
+  dokumentációs tér (Confluence/SharePoint), jogosultságok, alap sablonok (kockázati napló, RACI, kommunikációs terv).
+- Projektzáráskor fordítva: archiválás, jogosultság-visszavonás, lessons learned űrlap.
 
-python cli.py run                 # pipeline futtatása -> pending draft(ok)
-python cli.py list pending        # mi vár jóváhagyásra
-python cli.py show <draft_id>     # állítások, verdiktek, carousel-szöveg, források
-python cli.py approve <draft_id> --notes "..."
-python cli.py render <draft_id>   # PNG slide-ok generálása (data/generated_images/)
-python cli.py publish <draft_id>  # dry-run: kiírja, mit posztolna
-```
+### 2.4 Változáskérés- és scope-kezelés
+- Change request workflow jóváhagyással, az óra- és költséghatás automatikus becslésével.
+- Csökkenti a "scope creep"-et és a nem számlázott többletmunkát.
 
-Teszt: `PYTHONPATH=src pytest tests/`
+### 2.5 Ügyfélportál
+- Az ügyfél saját felületen látja a státuszt, mérföldköveket, nyitott kérdéseket, jóváhagyandó tételeket.
+- Kevesebb "hol tart a projekt?" e-mail és hívás, gyorsabb ügyféljóváhagyások.
 
-## Éles módba kapcsolás - milyen API-kulcsok kellenek?
+---
 
-Másold `.env.example` -> `.env`. Minden kulcs **opcionális és független**:
-amelyik lépéshez kitöltöd a kulcsot, az éles módra vált, a többi mock/
-dry-run marad. A teljes éles működéshez ezek kellenek:
+## 3. Stratégiai / AI-alapú fejlesztések (3–6+ hónap)
 
-| Lépés | Env változó(k) | Kell kulcs? | Honnan |
-|---|---|---|---|
-| **LLM** (állítás-kinyerés, lekérdezés-terv, szintézis) | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | **Igen** | console.anthropic.com -> API Keys |
-| **Eurostat** adatlekérés | — | **Nem** (nyilvános) | csak hálózati elérés az ec.europa.eu-hoz |
-| **KSH** adatlekérés | `KSH_API_BASE` (opcionális felülírás) | **Nem** (nyilvános) | statinfo.ksh.hu / www.ksh.hu/stadat |
-| **Instagram figyelés** (Business Discovery) | `IG_ACCESS_TOKEN`, `IG_BUSINESS_ACCOUNT_ID` | **Igen** | developers.facebook.com (Meta app) |
-| **Instagram publikálás** (Content Publishing) | `IG_ACCESS_TOKEN`, `IG_BUSINESS_ACCOUNT_ID` (+ publikus kép-URL) | **Igen** | ugyanaz a token |
-| **Webkeresés fallback** (opcionális) | `TAVILY_API_KEY` | opcionális | docs.tavily.com |
+### 3.1 Csúszás- és kockázat-előrejelzés
+- A lezárt projektek historikus adataiból modell, ami előre jelzi a várható csúszást és túlköltést.
+- Már 20–30 lezárt projekt adata is ad használható jelzést, ha az adatok konzisztensek.
 
-**A minimum az igazi tényellenőrzéshez:** `ANTHROPIC_API_KEY`. Ezzel az
-LLM valódi állításokat nyer ki és élő Eurostat/KSH adatból dolgozik
-(a statisztikai API-khoz nem kell külön kulcs). Az Instagram-kulcsok
-csak a figyelés/publikálás automatizálásához kellenek - addig kézzel is
-be lehet táplálni posztot és kézzel posztolni a jóváhagyott draftot.
+### 3.2 Becslés-támogatás
+- Új ajánlatnál/projektnél a hasonló korábbi projektek tényleges ráfordításai alapján javasolt becslés
+  (és a becslés–tény eltérés statisztikája csapatonként/technológiánként).
+- Pontosabb ajánlatok → jobb marzs.
 
-### Instagram token beszerzése (röviden)
+### 3.3 Belső tudásbázis-asszisztens (RAG)
+- Kérdezhető AI-asszisztens a cég dokumentációin, korábbi projektjein, lessons learned anyagain.
+  ("Csináltunk már SAP-integrációt? Ki dolgozott rajta? Mik voltak a buktatók?")
+- Gyorsabb onboarding, kevesebb ismételt hiba.
 
-1. Meta fejlesztői fiók + app: developers.facebook.com
-2. Az IG fiók legyen **Business** vagy **Creator** típusú, Facebook
-   oldalhoz kötve.
-3. Engedélyek: `instagram_basic`, `instagram_content_publish`,
-   `pages_read_engagement`, `business_management`.
-4. Generálj **long-lived** access tokent, és a saját IG business
-   account ID-t tedd a `.env`-be.
+### 3.4 Fejlesztési folyamatmetrikák (DORA / flow metrics)
+- Lead time, deployment gyakoriság, átlagos ticket-ciklusidő, review-várakozási idő automatikus mérése.
+- Megmutatja, hol akad el a munka (pl. code review, tesztelés, ügyféljóváhagyás).
 
-Figyelt fiókok listája: `config/accounts.yaml`.
+---
 
-## Fontos korlátok
+## 4. Javasolt sorrend
 
-1. **A verification élő forráskeresést végez, DE emberi jóváhagyás
-   továbbra is kötelező.** Az LLM strukturált Eurostat/KSH lekérdezést
-   tervez, a rendszer valódi adatot húz le, és az LLM ebből hoz
-   verdiktet. Ettől függetlenül minden éles eredményen bekapcsol a
-   `needs_human_research` flag, ha nem jött vissza adat, hiba volt, vagy
-   a bizonyosság < 0,75 - és a review-queue amúgy is mindig emberi
-   jóváhagyást vár publikálás előtt. A dataset-kód/dimenzió megválasztása
-   LLM-feladat, ezért tévedhet: a lekért adat és a verdikt összhangját
-   embernek kell ellenőriznie.
-2. **A KSH API kevésbé stabil, mint az Eurostaté.** A pontos végpont/
-   dataset-azonosítás változhat; `KSH_API_BASE`-zel felülírható, és hiba
-   esetén a pipeline nem áll meg, csak "nincs adat" jelzést ad. Az
-   Eurostat a megbízhatóbb elsődleges forrás.
-3. **Csak a szöveges caption-t elemzi.** Instagram posztok nagy része
-   kép/videó - OCR és multimodális képelemzés még nincs bekötve
-   (`Post.image_description` mezőt kézzel/külön lépéssel kell
-   feltölteni, ha kép is hordoz állítást).
-3. **A Business Discovery API csak business/creator fiókokra megy.**
-   Ha egy politikus fiókja sima személyes fiók, API-val nem érhető el
-   - kézi/beküldéses figyelésre van szükség.
-4. **A publikálás képhosztingot igényel.** A Graph API `image_url`-t
-   vár, nem fájlfeltöltést - a renderelt slide-okat előbb publikus
-   tárhelyre (pl. S3+CloudFront) kell tölteni, az URL-eket a
-   `publish --image-url` kapja meg. Enélkül a `publish` mindig dry-run.
-5. **Szerkesztői fegyelem, nem technikai kérdés.** A projekt
-   védhetősége azon áll, hogy (a) csak ellenőrizhető ténystátuszú
-   állításokkal foglalkozik, nem véleményekkel, (b) minden oldal
-   posztjait ugyanolyan mércével nézi, (c) minden korrekcióhoz teljes
-   forráslista jár, (d) semmi nem publikálódik emberi jóváhagyás
-   nélkül.
+| Lépés | Megoldás | Miért először |
+|------|----------|---------------|
+| 1 | Automatikus státuszriport (1.1) | Azonnal érezhető időmegtakarítás, a meglévő adatokra épül |
+| 2 | Early warning riasztások (1.2) | Olcsó, és megelőzi a legdrágább problémákat |
+| 3 | Időnaplózás egyszerűsítése (1.3) | Minden későbbi elemzés adatminőségét javítja |
+| 4 | Kapacitástervező (2.1) | Legnagyobb üzleti hatás egy 80 fős cégnél |
+| 5 | Portfólió-dashboard (2.2) | Vezetői döntéstámogatás |
+| 6 | AI-előrejelzés, becslés (3.1–3.2) | Akkor érdemes, ha már van tiszta historikus adat |
 
-## Roadmap-ötletek
-
-- További strukturált források a retrievalbe: MNB, ÁSZ, Magyar Közlöny
-  (a `retrieval` réteg providerekre bontott, könnyen bővíthető).
-- Kép/videó OCR + multimodális elemzés a caption-only elemzés helyett.
-- Egyszerű webes review-felület a CLI helyett (a `review/queue.py`
-  fájlalapú tárolása miatt ez könnyen ráépíthető).
-- Automatikus S3-feltöltés a renderelt slide-okhoz, hogy a `publish`
-  éles módban is egy gombnyomásos legyen.
-- Napi/óránkénti ütemezés a `cli.py run`-ra a saját fiókod
-  Business Discovery hozzáférésével.
+## 5. Általános javaslatok
+- **Először mérj:** a bevezetés előtt rögzítsd a kiinduló értékeket (riportírásra fordított idő, csúszások aránya,
+  kapacitás-kihasználtság), hogy a hatás kimutatható legyen.
+- **Integráció, ne új rendszer:** a meglévő eszközökhöz (Jira, Teams, számlázó) kapcsolódjon, ne kelljen új felületet tanulni.
+- **Egy pilot csapat:** 1–2 projekten próbáld ki, majd skálázd.
+- **Adatvédelem:** LLM-használatnál ügyféladatokra vonatkozó szabályok (GDPR, szerződéses titoktartás) tisztázása,
+  szükség esetén EU-s / on-premise modell.
