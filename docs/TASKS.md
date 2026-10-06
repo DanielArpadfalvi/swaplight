@@ -18,7 +18,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 
 ## M3 – Game feel
 - [ ] T3.1 Particles, glow filters, screen shake, chain popups
-- [ ] T3.2 Procedural SFX (Web Audio) + generative music
+- [x] T3.2 Procedural SFX (Web Audio) + generative music
 - [ ] T3.3 Haptics hook via platform layer; reduced-motion setting; perf pass (60 FPS)
 
 ## M4 – Run mode
