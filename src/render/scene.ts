@@ -25,7 +25,8 @@ export class GameScene {
   private readonly shaker = new ScreenShake(10, 0.012, 1.8);
   private layout: GameLayout | null = null;
   private excitement = 0;
-  private readonly palette: Palette = NEON_PALETTE;
+  private palette: Palette = NEON_PALETTE;
+  private reduced = false;
 
   private constructor(app: Application) {
     this.app = app;
@@ -93,8 +94,9 @@ export class GameScene {
     const p = cellCenter(layout, row, col, riseFraction(sim));
     const base = this.palette.blocks[color]?.base ?? 0xffffff;
     const k = layout.cellSize / 48;
+    const count = 12 + Math.min(10, (chain - 1) * 3);
     this.particles.burst(p.x, p.y, base, {
-      count: 12 + Math.min(10, (chain - 1) * 3),
+      count: this.reduced ? Math.ceil(count * 0.35) : count,
       speed: 230 * k * (1 + 0.08 * (chain - 1)),
       radius: layout.cellSize * 0.3,
       scale: 0.85 * k,
@@ -139,12 +141,35 @@ export class GameScene {
   }
 
   flash(tone: 'chain' | 'gameOver'): void {
-    if (tone === 'chain') this.flashOverlay.flash(this.palette.ui.accent2, 0.22, 0.3);
-    else this.flashOverlay.flash(this.palette.ui.danger, 0.45, 0.6);
+    const k = this.reduced ? 0.4 : 1;
+    if (tone === 'chain') this.flashOverlay.flash(this.palette.ui.accent2, 0.22 * k, 0.3);
+    else this.flashOverlay.flash(this.palette.ui.danger, 0.45 * k, 0.6);
   }
 
+  /** Reduced motion: no screen shake, fewer particles, softer flashes. */
   set reducedMotion(on: boolean) {
+    this.reduced = on;
     this.shaker.enabled = !on;
+  }
+
+  get reducedMotion(): boolean {
+    return this.reduced;
+  }
+
+  /** Switch the block / effect palette (e.g. the high-contrast accessibility setting). */
+  setPalette(palette: Palette): void {
+    if (palette === this.palette) return;
+    this.palette = palette;
+    this.board.setPalette(palette);
+  }
+
+  get paletteName(): string {
+    return this.palette.name;
+  }
+
+  /** Hide the board and its effects (menus show only the backdrop). */
+  setBoardVisible(visible: boolean): void {
+    this.world.visible = visible;
   }
 
   clearEffects(): void {

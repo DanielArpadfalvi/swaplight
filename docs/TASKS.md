@@ -35,9 +35,9 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 - [ ] T5.4 Interactive tutorial
 
 ## M6 – Meta & UI
-- [ ] T6.1 Main menu, mode select, settings, pause
-- [ ] T6.2 Save system (versioned, migrations), stats, collection, unlocks
-- [ ] T6.3 i18n EN/HU, accessibility options
+- [x] T6.1 Main menu, mode select, settings, pause
+- [x] T6.2 Save system (versioned, migrations), stats, collection, unlocks
+- [x] T6.3 i18n EN/HU, accessibility options
 
 ## M7 – Mobile shell
 - [ ] T7.1 Capacitor setup (android/ios), app id, safe areas, lifecycle pause/resume, status bar

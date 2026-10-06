@@ -30,6 +30,7 @@ export function createWebLifecycle(
     onPause: (l) => pause.add(l),
     onResume: (l) => resume.add(l),
     onBackButton: (l) => back.add(l),
+    exitApp: () => undefined,
     dispose: () => {
       doc?.removeEventListener('visibilitychange', onVisibility);
       doc?.removeEventListener('keydown', onKey);
@@ -57,5 +58,6 @@ export function createNativeLifecycle(): Lifecycle {
     onPause: (l) => pause.add(l),
     onResume: (l) => resume.add(l),
     onBackButton: (l) => back.add(l),
+    exitApp: () => void App.exitApp(),
   };
 }

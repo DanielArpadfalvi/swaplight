@@ -1,8 +1,14 @@
-import { useMemo } from 'preact/hooks';
-import { versionLabel } from '../core/version';
+import type { Overlay } from '../game/nav';
 import { formatClock, type GameActions, type GameUiState } from '../game/state';
 import type { Store } from '../game/store';
-import { getLanguage, t } from '../i18n';
+import { t } from '../i18n';
+import { useFormat } from './format';
+import { IconPlay, IconSettings } from './icons';
+import { CollectionScreen, CreditsScreen, ExitDialog, PrivacyScreen } from './InfoScreens';
+import { MainMenu } from './Menu';
+import { Presence } from './Presence';
+import { SettingsScreen } from './Settings';
+import { StatsScreen } from './Stats';
 import { useCountUp } from './useCountUp';
 import { useStore } from './useStore';
 
@@ -11,24 +17,82 @@ interface AppProps {
   actions: GameActions;
 }
 
-function useFormat(): (n: number) => string {
-  const lang = getLanguage();
-  return useMemo(() => {
-    const fmt = new Intl.NumberFormat(lang);
-    return (n: number) => fmt.format(n);
-  }, [lang]);
-}
+const OVERLAYS: readonly Overlay[] = [
+  'settings',
+  'stats',
+  'collection',
+  'credits',
+  'privacy',
+  'exitConfirm',
+];
 
 export function App({ store, actions }: AppProps) {
   const state = useStore(store);
+  const rm = state.settings.reducedMotion;
+  const ms = rm ? 0 : 220;
+  const inGame = state.screen !== 'menu';
+  const classes = [
+    'ui-root',
+    `screen-${state.screen}`,
+    rm ? 'reduced-motion' : '',
+    state.settings.highContrast ? 'high-contrast' : '',
+  ];
   return (
-    <div class={`ui-root screen-${state.screen}`}>
-      {state.screen !== 'title' && <Hud state={state} actions={actions} />}
-      {state.screen === 'title' && <StartScreen actions={actions} best={state.best} />}
-      {state.screen === 'paused' && <PausePanel actions={actions} />}
+    <div class={classes.filter(Boolean).join(' ')} lang={state.language}>
+      <Presence when={!inGame} ms={ms}>
+        {(leaving) => <MainMenu state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      {inGame && <Hud state={state} actions={actions} />}
+      {inGame && <RaiseButton state={state} actions={actions} />}
+      <Presence when={state.screen === 'paused'} ms={ms}>
+        {(leaving) => <PausePanel actions={actions} leaving={leaving} />}
+      </Presence>
       {state.screen === 'gameOver' && <GameOverPanel state={state} actions={actions} />}
+      {OVERLAYS.map((o) => {
+        const index = state.overlays.indexOf(o);
+        return (
+          <Presence key={o} when={index >= 0} ms={ms}>
+            {(leaving) => renderOverlay(o, state, actions, leaving, 20 + Math.max(0, index))}
+          </Presence>
+        );
+      })}
+      {state.toast && (
+        <div
+          class="toast"
+          key={state.toast.key}
+          role="status"
+          data-testid="toast"
+          style={{ '--toast-hide': `${Math.max(0, state.toast.ms - 400)}ms` }}
+        >
+          {state.toast.text}
+        </div>
+      )}
     </div>
   );
+}
+
+function renderOverlay(
+  o: Overlay,
+  state: GameUiState,
+  actions: GameActions,
+  leaving: boolean,
+  z: number,
+) {
+  const props = { actions, leaving, z };
+  switch (o) {
+    case 'settings':
+      return <SettingsScreen state={state} {...props} />;
+    case 'stats':
+      return <StatsScreen state={state} {...props} />;
+    case 'collection':
+      return <CollectionScreen {...props} />;
+    case 'credits':
+      return <CreditsScreen {...props} />;
+    case 'privacy':
+      return <PrivacyScreen {...props} />;
+    case 'exitConfirm':
+      return <ExitDialog {...props} />;
+  }
 }
 
 function Hud({ state, actions }: { state: GameUiState; actions: GameActions }) {
@@ -98,57 +162,79 @@ function Hud({ state, actions }: { state: GameUiState; actions: GameActions }) {
   );
 }
 
-function StartScreen({ actions, best }: { actions: GameActions; best: number }) {
-  const fmt = useFormat();
+/** Press-and-hold RAISE control under the board. */
+function RaiseButton({ state, actions }: { state: GameUiState; actions: GameActions }) {
+  const width = Math.min(state.boardWidth, 280);
+  const style = {
+    top: `${state.controlsTop}px`,
+    left: `${state.boardLeft + (state.boardWidth - width) / 2}px`,
+    width: `${width}px`,
+  };
+  const down = (e: PointerEvent) => {
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    actions.setRaise(true);
+  };
+  const up = () => actions.setRaise(false);
   return (
-    <div class="overlay overlay-title" data-testid="start-screen">
-      <div class="title-block">
-        <h1 class="logo" aria-label={t('app.title')}>
-          <span class="logo-swap">SWAP</span>
-          <span class="logo-light">LIGHT</span>
-        </h1>
-        <p class="tagline">{t('app.tagline')}</p>
-      </div>
-      <div class="title-actions">
-        <div class="mode-card">
-          <span class="mode-name">{t('menu.endless')}</span>
-          <span class="mode-desc">{t('modes.endless')}</span>
-          {best > 0 && (
-            <span class="mode-best">
-              {t('hud.best')} · {fmt(best)}
-            </span>
-          )}
-        </div>
-        <button
-          type="button"
-          class="btn btn-primary btn-play"
-          data-testid="play"
-          onClick={() => actions.play()}
-        >
-          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-            <path
-              d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"
-              fill="currentColor"
-            />
-          </svg>
-          {t('common.play')}
-        </button>
-      </div>
-      <div class="ui-label">{versionLabel()}</div>
-    </div>
+    <button
+      type="button"
+      class={`raise-btn${state.raiseHeld ? ' raise-held' : ''}`}
+      style={style}
+      data-testid="raise"
+      aria-label={t('hud.raiseHint')}
+      aria-pressed={state.raiseHeld ? 'true' : 'false'}
+      onPointerDown={down}
+      onPointerUp={up}
+      onPointerCancel={up}
+      onLostPointerCapture={up}
+      onPointerLeave={up}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <path d="M12 4 4 14h5v6h6v-6h5z" fill="currentColor" />
+      </svg>
+      <span>{t('hud.raise')}</span>
+    </button>
   );
 }
 
-function PausePanel({ actions }: { actions: GameActions }) {
+function PausePanel({ actions, leaving }: { actions: GameActions; leaving: boolean }) {
   return (
-    <div class="overlay overlay-dim" data-testid="pause-panel">
+    <div
+      class={`overlay overlay-dim${leaving ? ' is-leaving' : ''}`}
+      data-testid="pause-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('common.paused')}
+    >
       <div class="panel">
         <h2 class="panel-title">{t('common.paused')}</h2>
-        <button type="button" class="btn btn-primary" onClick={() => actions.resume()}>
+        <button
+          type="button"
+          class="btn btn-primary"
+          data-testid="resume"
+          onClick={() => actions.resume()}
+        >
+          <IconPlay size={20} />
           {t('common.resume')}
         </button>
-        <button type="button" class="btn btn-ghost" onClick={() => actions.menu()}>
-          {t('common.quit')}
+        <button
+          type="button"
+          class="btn btn-ghost"
+          data-testid="pause-settings"
+          onClick={() => actions.openOverlay('settings')}
+        >
+          <IconSettings size={18} />
+          {t('menu.settings')}
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-quiet"
+          data-testid="quit-to-menu"
+          onClick={() => actions.menu()}
+        >
+          {t('common.quitToMenu')}
         </button>
       </div>
     </div>
@@ -194,7 +280,12 @@ function GameOverPanel({ state, actions }: { state: GameUiState; actions: GameAc
         >
           {t('gameOver.playAgain')}
         </button>
-        <button type="button" class="btn btn-ghost" onClick={() => actions.menu()}>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          data-testid="gameover-menu"
+          onClick={() => actions.menu()}
+        >
           {t('gameOver.mainMenu')}
         </button>
       </div>

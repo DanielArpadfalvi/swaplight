@@ -2,21 +2,26 @@ import { AudioEngine } from '../audio';
 import { cloneSim } from '../core/sim';
 import type { SimState } from '../core/types';
 import { dangerColumns } from '../core/view';
-import { t, initI18n } from '../i18n';
+import { t, initI18n, getLanguage, onLanguageChange, setLanguage } from '../i18n';
 import { bindKeyboardInput, bindPointerInput } from '../input/dom';
 import { geometryForSim, type BoardGeometry } from '../input/geometry';
 import { createPlatform, type Platform } from '../platform';
 import { cellCenter, computeLayout, readSafeInsets, type GameLayout } from '../render/board/layout';
 import { GameScene } from '../render/scene';
+import { HIGH_CONTRAST_PALETTE, NEON_PALETTE } from '../render/style/palette';
 import { mountUi } from '../ui/mount';
 import { feedbackForEvents, musicIntensity, type Feedback } from './feedback';
 import { GameLoop } from './loop';
+import { startMode, type ModeHost } from './modes';
+import { backAction, popOverlay, pushOverlay, type Overlay } from './nav';
+import { recordGame } from './progress';
+import { SaveManager } from './save';
 import { EndlessSession } from './session';
+import { applySettings, sanitizeSettings, type Settings, type SettingsTargets } from './settings';
 import { INITIAL_UI_STATE, type GameActions, type GameUiState } from './state';
 import { createStore, type Store } from './store';
 import type { SwaplightTestApi } from './testApi';
 
-export const BEST_SCORE_KEY = 'endless.best';
 /** Delay between the top-out and the game over panel (lets the flash/shake play). */
 const GAME_OVER_PANEL_DELAY_MS = 750;
 
@@ -24,7 +29,18 @@ function randomSeed(): string {
   return Math.floor(Math.random() * 0x7fffffff).toString(36);
 }
 
-/** Boot the Endless game: canvas scene, input, audio, platform services, HUD and test hooks. */
+/** Minimum play time (ticks) for a quit-to-menu game to count in the stats. */
+const MIN_RECORDED_TICKS = 5 * 60;
+const TOAST_MS = 2600;
+const HINT_MS = 5200;
+/** Space below the board for the RAISE button (56 px + gaps). */
+const CONTROLS_HEIGHT = 80;
+const CONTROLS_HINT_ID = 'endless.controls';
+
+/**
+ * Boot the app: platform services, save, canvas scene, input, audio, the Preact UI (menu, HUD,
+ * settings…) and the test hooks.
+ */
 export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise<void> {
   const params = new URLSearchParams(window.location.search);
   const testMode = params.has('test') || import.meta.env.DEV;
@@ -33,11 +49,64 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
 
   const platform: Platform = createPlatform();
   await initI18n(platform.storage).catch(() => undefined);
+  const save = new SaveManager(platform.storage);
+  await save.load();
+  // Entitlement: render from the cached flag, refresh when the store answers.
+  const purchasesReady = platform.purchases
+    .init()
+    .then(() => setFullVersion(platform.purchases.isFullVersion()))
+    .catch(() => undefined);
   const scene = await GameScene.create(stage);
   const audio = new AudioEngine();
   audio.installUnlockListeners();
 
-  const store: Store<GameUiState> = createStore({ ...INITIAL_UI_STATE });
+  const store: Store<GameUiState> = createStore({
+    ...INITIAL_UI_STATE,
+    settings: save.data.settings,
+    modeStats: save.data.modes,
+    fullVersion: save.data.fullVersion,
+    best: save.data.modes.endless?.best ?? 0,
+    language: getLanguage(),
+  });
+  save.subscribe((data) =>
+    store.set({ settings: data.settings, modeStats: data.modes, fullVersion: data.fullVersion }),
+  );
+
+  function setFullVersion(value: boolean): void {
+    if (save.data.fullVersion !== value) {
+      save.update((d) => {
+        d.fullVersion = value;
+      });
+    }
+  }
+  platform.purchases.onEntitlementChange(setFullVersion);
+
+  const settingsTargets: SettingsTargets = {
+    setVolume: (channel, v) => audio.setVolume(channel, v),
+    setHaptics: (on) => platform.haptics.setEnabled(on),
+    setReducedMotion: (on) => {
+      scene.reducedMotion = on;
+    },
+    setHighContrast: (on) => scene.setPalette(on ? HIGH_CONTRAST_PALETTE : NEON_PALETTE),
+    setLanguage: (lang) => {
+      void setLanguage(lang).catch(() => undefined);
+    },
+  };
+  applySettings(save.data.settings, settingsTargets);
+  onLanguageChange((language) => store.set({ language }));
+  store.set({ language: getLanguage() });
+
+  let toastKey = 0;
+  let toastTimer: number | undefined;
+  const showToast = (text: string, ms = TOAST_MS): void => {
+    store.set({ toast: { text, ms, key: ++toastKey } });
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => store.set({ toast: null }), ms);
+  };
+
+  const flushSave = (): Promise<void> => save.flush();
+  window.addEventListener('pagehide', () => void flushSave());
+
   let layout: GameLayout | null = null;
   const geometry = (): BoardGeometry | null =>
     layout ? geometryForSim(layout, session.sim) : null;
@@ -49,9 +118,15 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   const relayout = (): void => {
     const { width, height } = scene.app.screen;
     const { rows, cols } = session.sim.config;
-    layout = computeLayout(width, height, readSafeInsets(), { rows, cols });
+    layout = computeLayout(width, height, readSafeInsets(), {
+      rows,
+      cols,
+      bottomMargin: CONTROLS_HEIGHT,
+    });
     scene.setLayout(layout, cols);
     store.set({
+      controlsTop:
+        layout.originY + layout.boardHeight + layout.previewHeight + layout.framePad + 10,
       hudTop: layout.hudTop,
       hudHeight: layout.hudHeight,
       boardLeft: layout.originX - layout.framePad,
@@ -60,13 +135,6 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   };
   relayout();
   scene.app.renderer.on('resize', relayout);
-
-  void platform.storage
-    .get<number>(BEST_SCORE_KEY)
-    .then((v) => {
-      if (typeof v === 'number' && Number.isFinite(v)) store.set({ best: v });
-    })
-    .catch(() => undefined);
 
   let flashKey = 0;
   const applyFeedback = (list: readonly Feedback[], sim: SimState): void => {
@@ -94,7 +162,9 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
           scene.excite(f.amount);
           break;
         case 'scored':
-          store.set({ scoreFlash: { ...f, key: ++flashKey } });
+          if (store.get().settings.showBreakdown) {
+            store.set({ scoreFlash: { ...f, key: ++flashKey } });
+          }
           break;
       }
     }
@@ -110,16 +180,30 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     });
   };
 
+  /** Fold the current game into the save; returns whether it set a new best. */
+  const recordCurrentGame = (): boolean => {
+    const sim = session.sim;
+    let newBest = false;
+    save.update((d) => {
+      newBest = recordGame(d, 'endless', {
+        score: sim.score,
+        maxChain: sim.stats.maxChain,
+        maxCombo: sim.stats.maxCombo,
+        blocksCleared: sim.stats.blocksCleared,
+        seconds: Math.floor(sim.tick / 60),
+      });
+    });
+    return newBest;
+  };
+
   const enterGameOver = (): void => {
     loop.pause();
+    session.setRaiseButton(false);
+    store.set({ raiseHeld: false });
     const sim = session.sim;
-    const best = store.get().best;
-    const newBest = sim.score > best;
-    if (newBest) {
-      store.set({ best: sim.score });
-      void platform.storage.set(BEST_SCORE_KEY, sim.score).catch(() => undefined);
-    }
-    store.set({ newBest });
+    const newBest = recordCurrentGame();
+    store.set({ newBest, best: save.data.modes.endless?.best ?? sim.score });
+    void flushSave();
     audio.setIntensity(0.15);
     window.clearTimeout(gameOverTimer);
     gameOverTimer = window.setTimeout(() => {
@@ -169,7 +253,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
           cursor: session.keyboardActive && !sim.gameOver ? session.keyboard.cursor : null,
           raising: hints.raising,
         },
-        store.get().screen === 'title' ? 0 : danger,
+        store.get().screen === 'menu' ? 0 : danger,
       );
     },
   });
@@ -184,9 +268,28 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     loop.reset();
     lastIntensity = -1;
     publish(session.sim);
-    store.set({ screen: 'playing', newBest: false, scoreFlash: null });
+    store.set({
+      screen: 'playing',
+      raiseHeld: false,
+      overlays: [],
+      newBest: false,
+      scoreFlash: null,
+      best: save.data.modes.endless?.best ?? 0,
+    });
     audio.playMusic('game', { seed: session.sim.rng.a >>> 0, intensity: 0.2 });
     if (!frozen) loop.resume();
+    if (!save.data.hintsSeen.includes(CONTROLS_HINT_ID)) {
+      save.update((d) => {
+        d.hintsSeen.push(CONTROLS_HINT_ID);
+      });
+      showToast(t('hud.controlsHint'), HINT_MS);
+    }
+  };
+
+  const setRaise = (active: boolean): void => {
+    const on = active && store.get().screen === 'playing';
+    session.setRaiseButton(on);
+    store.set({ raiseHeld: on });
   };
 
   const pauseGame = (): void => {
@@ -194,6 +297,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     loop.pause();
     session.gesture.reset();
     session.keyboard.releaseAll();
+    setRaise(false);
     store.set({ screen: 'paused' });
   };
 
@@ -206,13 +310,65 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   const toMenu = (): void => {
     window.clearTimeout(gameOverTimer);
     loop.pause();
+    const sim = session.sim;
+    const screen = store.get().screen;
+    if ((screen === 'playing' || screen === 'paused') && !sim.gameOver) {
+      if (sim.tick >= MIN_RECORDED_TICKS) recordCurrentGame();
+    }
     session.restart(nextSeed());
     scene.board.resetTracking();
     scene.board.captureTick(session.sim);
     scene.clearEffects();
     publish(session.sim);
-    store.set({ screen: 'title', scoreFlash: null });
+    store.set({
+      screen: 'menu',
+      overlays: [],
+      scoreFlash: null,
+      danger: false,
+      raiseHeld: false,
+    });
     audio.playMusic('menu');
+  };
+
+  const setOverlays = (overlays: Overlay[]): void => store.set({ overlays });
+
+  const updateSettings = (patch: Partial<Settings>): void => {
+    const prev = save.data.settings;
+    const next = sanitizeSettings({ ...prev, ...patch });
+    save.update((d) => {
+      d.settings = next;
+    });
+    applySettings(next, settingsTargets, prev);
+  };
+
+  const modeHost: ModeHost = {
+    startEndless: () => startGame(),
+  };
+
+  const handleBack = (): void => {
+    const { screen, overlays } = store.get();
+    const action = backAction(screen, overlays);
+    switch (action.type) {
+      case 'closeOverlay':
+        audio.uiTap();
+        setOverlays(popOverlay(overlays));
+        break;
+      case 'pause':
+        actions.pause();
+        break;
+      case 'resume':
+        actions.resume();
+        break;
+      case 'toMenu':
+        actions.menu();
+        break;
+      case 'confirmExit':
+        audio.uiTap();
+        setOverlays(pushOverlay(overlays, 'exitConfirm'));
+        break;
+      case 'none':
+        break;
+    }
   };
 
   const actions: GameActions = {
@@ -221,9 +377,24 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       audio.uiConfirm();
       startGame();
     },
+    startMode(id) {
+      void audio.unlock();
+      const status = startMode(id, modeHost, store.get().fullVersion);
+      if (status === 'playable') {
+        audio.uiConfirm();
+      } else {
+        audio.uiTap();
+        platform.haptics.notify('warning');
+        if (status === 'locked') showToast(t('menu.lockedHint'));
+        else if (status === 'soon') showToast(t('menu.soonHint'));
+      }
+    },
     pause() {
       audio.uiTap();
       pauseGame();
+    },
+    setRaise(active) {
+      setRaise(active);
     },
     resume() {
       void audio.unlock();
@@ -239,6 +410,38 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       audio.uiTap();
       toMenu();
     },
+    openOverlay(overlay) {
+      void audio.unlock();
+      audio.uiTap();
+      setOverlays(pushOverlay(store.get().overlays, overlay));
+    },
+    closeOverlay() {
+      audio.uiTap();
+      setOverlays(popOverlay(store.get().overlays));
+    },
+    updateSettings(patch) {
+      updateSettings(patch);
+    },
+    restorePurchases() {
+      if (store.get().restoreStatus === 'busy') return;
+      audio.uiTap();
+      store.set({ restoreStatus: 'busy' });
+      void purchasesReady
+        .then(() => platform.purchases.restore())
+        .then((full) => {
+          setFullVersion(full);
+          store.set({ restoreStatus: full ? 'restored' : 'nothing' });
+        })
+        .catch(() => store.set({ restoreStatus: 'failed' }));
+    },
+    back() {
+      handleBack();
+    },
+    exitApp() {
+      void flushSave();
+      setOverlays(popOverlay(store.get().overlays, 'exitConfirm'));
+      platform.lifecycle.exitApp();
+    },
   };
 
   bindPointerInput(scene.canvas, session.gesture, () => {
@@ -250,16 +453,24 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
 
   platform.lifecycle.onPause(() => {
     pauseGame();
+    void flushSave();
     void audio.suspend();
   });
   platform.lifecycle.onResume(() => {
     void audio.resume();
   });
-  platform.lifecycle.onBackButton(() => {
-    const screen = store.get().screen;
-    if (screen === 'playing') actions.pause();
-    else if (screen === 'paused') actions.resume();
-  });
+  platform.lifecycle.onBackButton(handleBack);
+
+  // Menus show only the backdrop; the board appears with the game.
+  let boardShown: boolean | null = null;
+  const syncBoard = (state: GameUiState): void => {
+    const show = state.screen !== 'menu';
+    if (show === boardShown) return;
+    boardShown = show;
+    scene.setBoardVisible(show);
+  };
+  syncBoard(store.get());
+  store.subscribe(syncBoard);
 
   scene.board.captureTick(session.sim);
   audio.playMusic('menu');
@@ -287,6 +498,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         const sim = session.sim;
         return {
           screen: store.get().screen,
+          overlays: [...store.get().overlays],
+          raiseButton: session.raiseButtonHeld,
           seed: session.seed,
           tick: sim.tick,
           score: sim.score,
@@ -304,6 +517,14 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         };
       },
       getSim: () => cloneSim(session.sim),
+      getSave: () => structuredClone(save.data),
+      flushSave,
+      back: () => handleBack(),
+      getRenderInfo: () => ({
+        boardVisible: boardShown === true,
+        palette: scene.paletteName,
+        reducedMotion: scene.reducedMotion,
+      }),
       stopRendering: () => scene.app.ticker.stop(),
       startRendering: () => scene.app.ticker.start(),
       renderFrames(n: number, dtMs = 1000 / 60) {

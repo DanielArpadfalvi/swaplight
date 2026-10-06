@@ -53,6 +53,7 @@ export class BoardView extends Container {
   readonly textures: BlockTextureFactory;
   private palette: Palette;
   private layout: GameLayout | null = null;
+  private cols = 6;
 
   private readonly well = new Graphics();
   private readonly dangerLayer = new Container();
@@ -103,8 +104,17 @@ export class BoardView extends Container {
   setLayout(layout: GameLayout, cols: number): void {
     const sizeChanged = this.layout?.cellSize !== layout.cellSize;
     this.layout = layout;
+    this.cols = cols;
     if (sizeChanged) this.textures.clear();
     this.drawStatic(cols);
+  }
+
+  /** Switch palette (high-contrast setting); block textures are cached per palette. */
+  setPalette(palette: Palette): void {
+    if (palette === this.palette) return;
+    this.palette = palette;
+    this.textures.setPalette(palette);
+    this.drawStatic(this.cols);
   }
 
   /** Forget interpolation history (new game / board replaced). */

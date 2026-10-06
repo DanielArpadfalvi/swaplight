@@ -1,5 +1,6 @@
 import type { SimState } from '../core/types';
-import type { Screen } from './state';
+import type { Overlay, Screen } from './nav';
+import type { SaveData } from './save';
 
 /** Test / debug hooks, exposed as `window.__swaplight` in dev builds or with `?test`. */
 export interface SwaplightTestApi {
@@ -17,6 +18,13 @@ export interface SwaplightTestApi {
   getState(): SwaplightStateSummary;
   /** A plain-data copy of the full sim state (for running core logic in the test runner). */
   getSim(): SimState;
+  /** Deep copy of the in-memory save. */
+  getSave(): SaveData;
+  /** Write pending save changes now. */
+  flushSave(): Promise<void>;
+  /** Simulate the Android back button / Escape. */
+  back(): void;
+  getRenderInfo(): { boardVisible: boolean; palette: string; reducedMotion: boolean };
   /** Center of a grid cell in canvas CSS pixels (at the current rise offset). */
   cellCenter(row: number, col: number): { x: number; y: number };
   /**
@@ -31,6 +39,9 @@ export interface SwaplightTestApi {
 
 export interface SwaplightStateSummary {
   screen: Screen;
+  overlays: Overlay[];
+  /** The on-screen RAISE button is held. */
+  raiseButton: boolean;
   seed: string;
   tick: number;
   score: number;

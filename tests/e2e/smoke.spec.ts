@@ -15,7 +15,7 @@ test('app boots with canvas and UI overlay, no console errors', async ({ page })
   const canvas = page.locator('#stage canvas');
   await expect(canvas).toHaveCount(1);
   await expect(page.locator('#ui')).toBeAttached();
-  await expect(page.locator('#ui .ui-label')).toContainText('Swaplight');
+  await expect(page.locator('#ui .ui-label').first()).toContainText('Swaplight');
   await expect(page.getByTestId('play')).toBeVisible();
 
   const box = await canvas.boundingBox();

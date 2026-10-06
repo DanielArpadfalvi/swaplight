@@ -34,6 +34,8 @@ export interface Lifecycle {
   onPause(listener: () => void): Unsubscribe;
   onResume(listener: () => void): Unsubscribe;
   onBackButton(listener: () => void): Unsubscribe;
+  /** Close the app (Android back on the main menu). No-op on the web. */
+  exitApp(): void;
 }
 
 /** `dark` = dark app background, i.e. light status bar content. */

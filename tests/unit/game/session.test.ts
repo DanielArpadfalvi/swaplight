@@ -69,3 +69,20 @@ describe('formatClock', () => {
     expect(formatClock(600)).toBe('10:00');
   });
 });
+
+describe('EndlessSession raise button', () => {
+  it('holding the on-screen button sends raise on/off once each', () => {
+    const s = new EndlessSession('abc', () => null);
+    s.setRaiseButton(true);
+    expect(s.raiseButtonHeld).toBe(true);
+    for (let i = 0; i < 90; i++) s.tick(i * 16);
+    const raisedRows = s.sim.stats.rowsRisen;
+    s.setRaiseButton(false);
+    s.tick(2000);
+    const idle = new EndlessSession('abc', () => null);
+    for (let i = 0; i < 90; i++) idle.tick(i * 16);
+    expect(raisedRows).toBeGreaterThan(idle.sim.stats.rowsRisen);
+    s.restart('abc');
+    expect(s.raiseButtonHeld).toBe(false);
+  });
+});

@@ -22,6 +22,8 @@ export class EndlessSession {
   readonly events: SimEvent[] = [];
   private pending: SimInput[] = [];
   private raiseSent = false;
+  /** On-screen RAISE button held (merged with gesture / keyboard raise). */
+  private raiseButton = false;
   /** The keyboard was used this game (show its cursor). */
   keyboardActive = false;
 
@@ -49,8 +51,21 @@ export class EndlessSession {
     this.keyboard.update();
     this.pending = [];
     this.raiseSent = false;
+    this.raiseButton = false;
     this.keyboardActive = false;
     for (const k of Object.keys(this.eventCounts)) delete this.eventCounts[k as SimEvent['type']];
+  }
+
+  /**
+   * Hold / release the dedicated on-screen RAISE button. Adapter until `GestureController` exposes
+   * its own raise-button input; the hold is OR-ed with the gesture and keyboard raise.
+   */
+  setRaiseButton(active: boolean): void {
+    this.raiseButton = active;
+  }
+
+  get raiseButtonHeld(): boolean {
+    return this.raiseButton;
   }
 
   /** Queue a command for the next tick (test hooks, scripted input). */
@@ -70,7 +85,7 @@ export class EndlessSession {
     for (const c of keys) if (c.type === 'swap') inputs.push(c);
     for (const c of this.pending) inputs.push(c);
     this.pending = [];
-    const raise = this.gesture.hints.raising || this.keyboard.isRaising;
+    const raise = this.gesture.hints.raising || this.keyboard.isRaising || this.raiseButton;
     if (raise !== this.raiseSent) {
       inputs.push({ type: 'raise', active: raise });
       this.raiseSent = raise;
