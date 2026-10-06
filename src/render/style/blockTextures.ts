@@ -44,6 +44,11 @@ export interface BlockTextureFactoryOptions {
   palette?: Palette;
   /** Texture resolution; defaults to the renderer's (i.e. device pixel ratio). */
   resolution?: number;
+  /**
+   * Tile sizes kept baked at once (most recently used first). Each game mode lays the board out at
+   * its own cell size, so keeping a few avoids re-baking every texture on each mode switch.
+   */
+  maxSizes?: number;
 }
 
 /** Halo margin around a tile of the given size. */
@@ -61,6 +66,8 @@ const KIND_INDEX: Readonly<Record<BlockKind, number>> = {
 const STATE_INDEX: Readonly<Record<BlockState, number>> = { normal: 0, dimmed: 1, flash: 2 };
 /** Colors per kind slot in the numeric fast cache (larger indices fall back to `get`). */
 const FAST_COLORS = 16;
+const WARM_STATES: readonly BlockState[] = ['normal', 'dimmed', 'flash'];
+const WARM_KINDS: readonly Exclude<BlockKind, 'color'>[] = ['garbage', 'wild', 'bomb', 'mystery'];
 
 export function blockTextureKey(req: BlockTextureRequest, resolution: number): string {
   const color = req.kind === 'color' ? (req.color ?? 0) : '-';
@@ -105,6 +112,9 @@ export class BlockTextureFactory {
    */
   private palette: Palette;
   private resolution: number;
+  /** Sizes with cached textures, most recently used first (see `useSize`). */
+  private sizes: number[] = [];
+  private readonly maxSizes: number;
 
   constructor(
     private readonly renderer: Renderer,
@@ -112,6 +122,12 @@ export class BlockTextureFactory {
   ) {
     this.palette = options.palette ?? NEON_PALETTE;
     this.resolution = options.resolution ?? renderer.resolution;
+    this.maxSizes = Math.max(1, options.maxSizes ?? 1);
+  }
+
+  /** Sizes currently kept, most recently used first. */
+  get keptSizes(): readonly number[] {
+    return this.sizes;
   }
 
   get cacheSize(): number {
@@ -145,6 +161,7 @@ export class BlockTextureFactory {
     if (size !== this.fastSize) {
       this.fast = [];
       this.fastSize = size;
+      this.useSize(size);
     }
     const c = kind === 'color' ? color : 0;
     if (c < 0 || c >= FAST_COLORS) return this.get({ kind, color, state, size });
@@ -171,17 +188,70 @@ export class BlockTextureFactory {
     return this.get({ kind: 'color', color, size, state });
   }
 
-  /** Render every variant for the given sizes up front (avoids a hitch on first use). */
-  warmup(sizes: readonly number[], colorCount = this.palette.blocks.length): void {
-    const states: BlockState[] = ['normal', 'dimmed', 'flash'];
-    for (const size of sizes) {
-      for (const state of states) {
-        for (let c = 0; c < colorCount; c++) this.get({ kind: 'color', color: c, size, state });
-        this.get({ kind: 'garbage', size, state });
-        this.get({ kind: 'wild', size, state });
-        this.get({ kind: 'bomb', size, state });
+  /** Every tile variant of `size` a board can show (colors of the current palette). */
+  variants(size: number): BlockTextureRequest[] {
+    const out: BlockTextureRequest[] = [];
+    for (const state of WARM_STATES) {
+      for (let c = 0; c < this.palette.blocks.length; c++) {
+        out.push({ kind: 'color', color: c, size, state });
       }
+      for (const kind of WARM_KINDS) out.push({ kind, size, state });
     }
+    return out;
+  }
+
+  has(req: BlockTextureRequest): boolean {
+    return this.cache.has(`${this.palette.name}/${blockTextureKey(req, this.resolution)}`);
+  }
+
+  /** Render every variant for the given sizes up front (avoids a hitch on first use). */
+  warmup(sizes: readonly number[]): void {
+    for (const size of sizes) this.warmupStep(size, () => false);
+  }
+
+  /**
+   * Bake missing variants of `size` until `outOfTime()` (checked after each one, so at least one is
+   * baked per call). Returns true once every variant is cached. Spreads the bake over idle frames.
+   */
+  warmupStep(size: number, outOfTime: () => boolean): boolean {
+    this.useSize(size, false);
+    let baked = false;
+    for (const req of this.variants(size)) {
+      if (this.has(req)) continue;
+      if (baked && outOfTime()) return false;
+      this.get(req);
+      baked = true;
+    }
+    return true;
+  }
+
+  /**
+   * Mark `size` as in use. Beyond `maxSizes`, the least recently used size's textures are retired
+   * (destroyed a few frames later; callers must not keep sprites bound to that size). With
+   * `promote` false a size already kept keeps its rank (background warmup must not push the size
+   * on screen out).
+   */
+  useSize(size: number, promote = true): void {
+    for (const evicted of touchSize(this.sizes, size, this.maxSizes, promote)) {
+      this.evictSize(evicted);
+    }
+  }
+
+  private evictSize(size: number): void {
+    const doomed: { destroy(): void }[] = [];
+    for (const [key, set] of this.cache) {
+      if (set.size !== size) continue;
+      this.cache.delete(key);
+      doomed.push(
+        { destroy: () => set.body.destroy(true) },
+        { destroy: () => set.glow.destroy(true) },
+      );
+    }
+    if (size === this.fastSize) {
+      this.fast = [];
+      this.fastSize = -1;
+    }
+    deferDestroy(doomed);
   }
 
   /**
@@ -201,6 +271,8 @@ export class BlockTextureFactory {
     }
     this.cache.clear();
     this.fast = [];
+    this.fastSize = -1;
+    this.sizes = [];
     this.retired = doomed;
   }
 
@@ -212,7 +284,8 @@ export class BlockTextureFactory {
 
   // --- building -------------------------------------------------------------------------------
 
-  private build(req: BlockTextureRequest): BlockTextureSet {
+  /** Bake one variant (overridden in tests, which have no canvas / GPU). */
+  protected build(req: BlockTextureRequest): BlockTextureSet {
     const state = req.state ?? 'normal';
     const size = req.size;
     const colors = this.colorsFor(req.kind, req.color ?? 0, state);
@@ -453,6 +526,20 @@ export class BlockTextureFactory {
   private symbolFor(color: number): BlockSymbol {
     return this.palette.blocks[color]?.symbol ?? 'circle';
   }
+}
+
+/**
+ * Update a most-recently-used list of tile sizes (in place) and return the sizes pushed past
+ * `max`. With `promote` false a new size goes right after the first (on-screen) one and a size
+ * already listed keeps its rank, so background warmup never evicts the size in use.
+ */
+export function touchSize(sizes: number[], size: number, max: number, promote = true): number[] {
+  const i = sizes.indexOf(size);
+  if (i === 0 || (i > 0 && !promote)) return [];
+  if (i > 0) sizes.splice(i, 1);
+  if (promote || sizes.length === 0) sizes.unshift(size);
+  else sizes.splice(1, 0, size);
+  return sizes.splice(Math.max(1, max));
 }
 
 interface DeferredBatch {

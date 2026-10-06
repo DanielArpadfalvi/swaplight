@@ -17,9 +17,9 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 - [x] **T2.3 Endless mode + HUD** – score, chain/combo popups, speed level, game over screen, restart. AC: Playwright test plays scripted swaps; screenshots reviewed.
 
 ## M3 – Game feel
-- [ ] T3.1 Particles, glow filters, screen shake, chain popups
+- [x] T3.1 Particles, glow filters, screen shake, chain popups
 - [x] T3.2 Procedural SFX (Web Audio) + generative music
-- [ ] T3.3 Haptics hook via platform layer; reduced-motion setting; perf pass (60 FPS)
+- [x] T3.3 Haptics hook via platform layer; reduced-motion setting; perf pass (60 FPS) – `docs/PERF.md`, `npm run test:perf`; open: insane-CPU per-tick budget, real-device GPU check
 
 ## M4 – Run mode
 - [x] T4.1 Stage goals + run structure (3 acts × 3 stages + boss), currency

@@ -1,5 +1,5 @@
-import { BitmapFont, BitmapText, Container, Sprite, Texture } from 'pixi.js';
-import type { TextStyleOptions } from 'pixi.js';
+import { BitmapFontManager, BitmapText, Container, Sprite, Texture } from 'pixi.js';
+import type { BitmapFont, Renderer, TextStyleOptions } from 'pixi.js';
 import { mixColor } from './colorMath';
 import { mulberry32 } from './prng';
 import { softDotTexture, sparkTexture } from './softTextures';
@@ -215,13 +215,17 @@ export function neonTextStyle(color: number, fontSize = 32): TextStyleOptions {
 const POPUP_GLOW_FONT = 'SwaplightPopupGlow';
 const POPUP_CORE_FONT = 'SwaplightPopupCore';
 const POPUP_FONT_SIZE = 56;
-const POPUP_CHARS: (string | string[])[] = [['A', 'Z'], ['0', '9'], ' ×+-!.,:%'];
-let popupFontsInstalled = false;
+/**
+ * Every glyph a popup can show: upper-case EN + HU letters, digits and the score / chain
+ * punctuation. A glyph missing here is drawn on first use, which re-uploads a whole font page to
+ * the GPU mid-game (a visible hitch on phones).
+ */
+export const POPUP_GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÖŐÚÜŰ0123456789 ×+-!.,:%';
+let popupFonts: BitmapFont[] | null = null;
 
 /** Install the dynamic bitmap fonts used by popups (idempotent). */
 export function installPopupFonts(resolution = 2): void {
-  if (popupFontsInstalled) return;
-  popupFontsInstalled = true;
+  if (popupFonts) return;
   const base = {
     fontFamily: NEON_FONT_FAMILY,
     fontSize: POPUP_FONT_SIZE,
@@ -230,9 +234,9 @@ export function installPopupFonts(resolution = 2): void {
     letterSpacing: 2,
     fill: 0xffffff,
   };
-  BitmapFont.install({
+  const glow = BitmapFontManager.install({
     name: POPUP_GLOW_FONT,
-    chars: POPUP_CHARS,
+    chars: POPUP_GLYPHS,
     resolution,
     padding: 18,
     style: {
@@ -242,13 +246,24 @@ export function installPopupFonts(resolution = 2): void {
     },
   });
   // Dark outline survives tinting (black × tint = black) and keeps the label legible over tiles.
-  BitmapFont.install({
+  const core = BitmapFontManager.install({
     name: POPUP_CORE_FONT,
-    chars: POPUP_CHARS,
+    chars: POPUP_GLYPHS,
     resolution,
     padding: 6,
     style: { ...base, stroke: { color: 0x0a0414, width: 5, join: 'round' } },
   });
+  popupFonts = [glow, core];
+}
+
+/**
+ * Upload the popup font pages to the GPU now (scene setup) instead of on the first popup, which
+ * would otherwise stall the frame of the player's first chain by several large texture uploads.
+ */
+export function uploadPopupFonts(renderer: Renderer): void {
+  for (const font of popupFonts ?? []) {
+    for (const page of font.pages) renderer.texture.initSource(page.texture.source);
+  }
 }
 
 export interface PopupOptions {

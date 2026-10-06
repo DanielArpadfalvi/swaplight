@@ -7,10 +7,28 @@ import { NeonBackground } from './style/background';
 import { attachDeferredDestroy } from './style/blockTextures';
 import { AttackBoltPool, type BoltOptions } from './style/bolts';
 import { mixColor } from './style/colorMath';
-import { FlashOverlay, FloatingTextPool, ParticleBurstPool, ScreenShake } from './style/effects';
+import {
+  FlashOverlay,
+  FloatingTextPool,
+  ParticleBurstPool,
+  ScreenShake,
+  uploadPopupFonts,
+} from './style/effects';
 import { NEON_PALETTE, type Palette } from './style/palette';
 
 export type PopupToneName = 'chain' | 'combo' | 'score' | 'level';
+
+interface WarmJob {
+  view: 'main' | 'opponent';
+  size: number;
+  /** Also bake the common garbage slabs (Versus). */
+  slabs: boolean;
+}
+
+/** Wall-clock time per idle frame spent baking textures ahead of use. */
+const WARMUP_BUDGET_MS = 3;
+/** Distinct player-board cell sizes (Endless, Run / Daily, Puzzle / Tutorial, Versus). */
+const MAIN_TEXTURE_SIZES = 4;
 
 /**
  * The gameplay canvas: synthwave backdrop, the board and the effect layers (particles, popups,
@@ -33,15 +51,18 @@ export class GameScene {
   private excitement = 0;
   private palette: Palette = NEON_PALETTE;
   private reduced = false;
+  /** Pending idle-time texture bakes (see `prewarm`). */
+  private warmQueue: WarmJob[] = [];
 
   private constructor(app: Application) {
     this.app = app;
     attachDeferredDestroy(app.renderer);
     const { width, height } = app.screen;
     this.bg = new NeonBackground({ width, height, seed: 3, horizon: 0.62 });
-    this.board = new BoardView(app.renderer, this.palette);
+    this.board = new BoardView(app.renderer, this.palette, MAIN_TEXTURE_SIZES);
     this.particles = new ParticleBurstPool({ seed: 11 });
     this.popups = new FloatingTextPool(16, Math.max(2, app.renderer.resolution));
+    uploadPopupFonts(app.renderer);
     this.flashOverlay = new FlashOverlay(width, height);
     this.world.addChild(this.board, this.particles, this.popups, this.bolts);
     app.stage.addChild(this.bg, this.world, this.flashOverlay);
@@ -79,7 +100,37 @@ export class GameScene {
     this.excitement = Math.min(1, Math.max(this.excitement, amount));
   }
 
+  /**
+   * Bake block textures for the layouts the player can enter next (each mode has its own cell
+   * size) during idle menu frames, so a mode's first frame does not stall on texture baking.
+   * Versus sizes (its main board and the CPU's mini board) also get the common garbage slabs,
+   * which would otherwise be baked mid-match. Replaces any pending warmup.
+   */
+  prewarm(mainSizes: readonly number[], versus?: { main: number; opponent: number }): void {
+    const jobs: WarmJob[] = [...new Set(mainSizes)].map((size) => ({
+      view: 'main',
+      size,
+      slabs: size === versus?.main,
+    }));
+    if (versus) jobs.push({ view: 'opponent', size: versus.opponent, slabs: true });
+    this.warmQueue = jobs;
+  }
+
+  private runWarmup(): void {
+    const deadline = performance.now() + WARMUP_BUDGET_MS;
+    const outOfTime = (): boolean => performance.now() >= deadline;
+    while (this.warmQueue.length > 0) {
+      const job = this.warmQueue[0]!;
+      const view = job.view === 'main' ? this.board : this.ensureOpponentView();
+      if (!view.warmup(job.size, outOfTime, job.slabs)) return;
+      this.warmQueue.shift();
+      if (outOfTime()) return;
+    }
+  }
+
   render(sim: SimState, alpha: number, dt: number, hints: BoardRenderHints, danger: number): void {
+    // Only while the board is hidden (menus): never compete with gameplay frames.
+    if (this.warmQueue.length > 0 && !this.world.visible) this.runWarmup();
     this.excitement = Math.max(0, this.excitement - dt * 0.8);
     this.bg.setIntensity(Math.max(danger, this.excitement));
     this.bg.update(dt);
@@ -157,13 +208,19 @@ export class GameScene {
       if (this.opponentView) this.opponentView.visible = false;
       return;
     }
+    const view = this.ensureOpponentView();
+    view.visible = true;
+    view.setLayout(layout, cols);
+  }
+
+  private ensureOpponentView(): BoardView {
     if (!this.opponentView) {
       this.opponentView = new BoardView(this.app.renderer, this.palette);
       this.opponentView.setFrameColors([0xff8a3d, 0xff3b6b]);
+      this.opponentView.visible = false;
       this.world.addChildAt(this.opponentView, 1);
     }
-    this.opponentView.visible = true;
-    this.opponentView.setLayout(layout, cols);
+    return this.opponentView;
   }
 
   get opponent(): BoardView | null {
@@ -242,6 +299,11 @@ export class GameScene {
   /** Hide the board and its effects (menus show only the backdrop). */
   setBoardVisible(visible: boolean): void {
     this.world.visible = visible;
+  }
+
+  /** Live particles / popups (perf probe). */
+  get effectCounts(): { particles: number; popups: number } {
+    return { particles: this.particles.activeCount, popups: this.popups.activeCount };
   }
 
   clearEffects(): void {

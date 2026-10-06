@@ -8,6 +8,7 @@ import type { PlayMode } from './state';
 import type { TutorialTestApi } from './tutorialMode';
 import type { VersusTestApi } from './versusMode';
 import type { SaveData } from './save';
+import type { PerfReport } from './perf';
 
 /** Test / debug hooks, exposed as `window.__swaplight` in dev builds or with `?test`. */
 export interface SwaplightTestApi {
@@ -42,6 +43,13 @@ export interface SwaplightTestApi {
   startRendering(): void;
   /** Draw `n` frames advancing effects by `dtMs` each (sim only steps if not frozen). */
   renderFrames(n: number, dtMs?: number): void;
+  /**
+   * Perf probe: run `frames` real animation frames (fixed 60 Hz dt, ticker must be stopped) and
+   * time each phase. `stress` injects worst-case chain feedback (bursts, popups, shake, flash).
+   */
+  perf?: {
+    profile(opts?: { frames?: number; stress?: boolean }): Promise<PerfReport>;
+  };
   /** Run-mode hooks (start a run with a seed / deck, force-win stages, shop, charms…). */
   run?: RunTestApi;
   /** Versus CPU hooks (start with a seed / level, scripted garbage, force win / lose…). */

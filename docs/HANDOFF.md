@@ -9,7 +9,7 @@ Utolsó frissítés: 2026-10-06. Ez a fájl ahhoz kell, hogy a fejlesztést egy 
 | M0 Alapozás (Vite+TS+Pixi+Preact, lint, teszt, CI) | ✅ |
 | M1 Mag-motor (determinisztikus Panel de Pon-szerű szimuláció) | ✅ |
 | M2 Játszható prototípus (Végtelen mód) | ✅ |
-| M3 Játékélmény (effektek, procedurális hang/zene, haptika) | ✅ |
+| M3 Játékélmény (effektek, procedurális hang/zene, haptika, perf pass) | ✅ |
 | M4 Futam mód (roguelite: 47 ereklye, 15 talizmán, bolt, 8 főellenség, 6 pakli, Fényerő 1–8) | ✅ |
 | M5 További módok (Versus CPU 5 szinttel, Napi kihívás, 120 fejtörő, Oktatás) | ✅ |
 | M6 Meta & UI (menü, beállítások, mentés, statisztika, gyűjtemény, EN/HU) | ✅ |
@@ -23,7 +23,7 @@ Részletes feladatlista: `docs/TASKS.md`. Terv: `docs/PLAN.md`. Kiadási útmuta
 - Az átadáskor **nem futott semmi**: a T9.3 utolsó QA-kör kész, pusholva és átvezetve a `main`-re (679 unit + 26 e2e teszt zöld).
 - **Következő lépések** (új munkamenetben):
   1. **T9.2 élesítése:** ha a secretek (lásd 7. pont) megvannak, első aláírt AAB és TestFlight build a GitHub Actions-ből (`android.yml` → release-aab, `ios.yml` → release), és a hibák javítása. Az iOS signed export még soha nem futott élesben – ha az unsigned archive + cloud signing nem megy, át kell állni signed archive-ra (`-allowProvisioningUpdates`), lásd `docs/RELEASE.md`.
-  2. Valódi telefonos tesztelés visszajelzései alapján finomhangolás (pl. Futam egyensúly, Versus szintek).
+  2. Valódi telefonos tesztelés visszajelzései alapján finomhangolás (pl. Futam egyensúly, Versus szintek). Teljesítmény: a T3.3 perf pass kész (`docs/PERF.md`, `npm run test:perf`). Valódi eszközön még ellenőrizni kell a GPU fill rate-et, és dönteni kell az 5-ös CPU tickenkénti munkakeretéről (lásd `docs/PERF.md` → „Nyitva maradt”).
   3. Opcionális P3-ak a legutóbbi QA-ból: Endless tipp eltakarja a pontszám feliratát 360×640-en az első másodpercekben; Szikra számláló ezres tagolás nélkül („1305”); HU „PONT” vs „PONTSZÁM” felirat a Futam HUD-ban; Kapcsolat sor ikonja jobbra igazodik; „FŐELLENSÉGEK” fül 360 px-en ~9 px-re kicsinyedik.
   4. Ezután: következő projekt (Worms-szerű aszinkron artillery).
 

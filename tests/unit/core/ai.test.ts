@@ -197,8 +197,9 @@ describe('CPU basics', () => {
     }
     cpus.forEach((cpu, i) => {
       const p = cpu.profile;
-      // At most one rollout of overshoot.
-      expect(maxUnits[i]).toBeLessThan(p.budget + p.horizon + 200 + p.maxDrag * 2 * p.actionTicks);
+      // Rollouts pause mid-way: at most one work step (2 units) of overshoot. Regression (perf
+      // pass): a whole rollout used to run past the budget, stalling frames on slow phones.
+      expect(maxUnits[i]).toBeLessThanOrEqual(p.budget + 1);
       expect(cpu.stats.units).toBeGreaterThan(0);
     });
   });

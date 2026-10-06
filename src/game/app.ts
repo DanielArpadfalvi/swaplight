@@ -1,3 +1,4 @@
+import type { Container } from 'pixi.js';
 import { AudioEngine } from '../audio';
 import { cloneSim } from '../core/sim';
 import type { SimState } from '../core/types';
@@ -12,10 +13,11 @@ import { GameScene } from '../render/scene';
 import { HIGH_CONTRAST_PALETTE, NEON_PALETTE } from '../render/style/palette';
 import { mountUi } from '../ui/mount';
 import { createDailyMode } from './dailyMode';
-import { feedbackForEvents, musicIntensity, type Feedback } from './feedback';
+import { chainShake, feedbackForEvents, musicIntensity, type Feedback } from './feedback';
 import { GameLoop } from './loop';
 import { startMode, type ModeHost, type ModeId } from './modes';
 import { createPaywall } from './paywall';
+import { summarizeSamples, type FrameSample } from './perf';
 import {
   backAction,
   popOverlay,
@@ -200,17 +202,52 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   let layoutMode: LayoutMode = 'endless';
   let versusLayout: VersusLayout | null = null;
 
-  const relayout = (): void => {
+  /** Board layout of a mode at the current screen size (Versus also returns its mini board). */
+  const layoutFor = (mode: LayoutMode): { main: GameLayout; versus: VersusLayout | null } => {
     const { width, height } = scene.app.screen;
     const { rows, cols } = session.sim.config;
     const insets = readSafeInsets();
-    if (layoutMode === 'versus') {
-      versusLayout = computeVersusLayout(width, height, insets, {
+    if (mode === 'versus') {
+      const v = computeVersusLayout(width, height, insets, {
         rows,
         cols,
         bottomMargin: CONTROLS_HEIGHT,
       });
-      layout = versusLayout.main;
+      return { main: v.main, versus: v };
+    }
+    const main = computeLayout(width, height, insets, {
+      rows,
+      cols,
+      bottomMargin: CONTROLS_HEIGHT,
+      // The Run / Daily HUD adds the goal bar and the relic / twist row.
+      ...(mode === 'run' || mode === 'daily'
+        ? { hudFraction: 0.235, minHud: 176, maxHud: 214 }
+        : {}),
+      // Puzzle / tutorial boards never rise: no preview strip. Their HUD (title + pause row,
+      // goal card + moves / coach card) needs a taller band than Endless.
+      ...(mode === 'static'
+        ? { previewCells: 0, hudFraction: 0.25, minHud: 164, maxHud: 214 }
+        : {}),
+    });
+    return { main, versus: null };
+  };
+
+  /** Bake every mode's block textures in idle menu frames (see `GameScene.prewarm`). */
+  const prewarmLayouts = (): void => {
+    const all = (['endless', 'run', 'static', 'versus'] as const).map(layoutFor);
+    const versus = all.find((l) => l.versus)?.versus;
+    scene.prewarm(
+      all.map((l) => l.main.cellSize),
+      versus ? { main: versus.main.cellSize, opponent: versus.mini.cellSize } : undefined,
+    );
+  };
+
+  const relayout = (): void => {
+    const { cols } = session.sim.config;
+    const next = layoutFor(layoutMode);
+    versusLayout = next.versus;
+    layout = next.main;
+    if (versusLayout) {
       const { mini, queue, miniQueue, card } = versusLayout;
       store.set({
         versusLayout: {
@@ -226,21 +263,6 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         },
       });
     } else {
-      versusLayout = null;
-      layout = computeLayout(width, height, insets, {
-        rows,
-        cols,
-        bottomMargin: CONTROLS_HEIGHT,
-        // The Run / Daily HUD adds the goal bar and the relic / twist row.
-        ...(layoutMode === 'run' || layoutMode === 'daily'
-          ? { hudFraction: 0.235, minHud: 176, maxHud: 214 }
-          : {}),
-        // Puzzle / tutorial boards never rise: no preview strip. Their HUD (title + pause row,
-        // goal card + moves / coach card) needs a taller band than Endless.
-        ...(layoutMode === 'static'
-          ? { previewCells: 0, hudFraction: 0.25, minHud: 164, maxHud: 214 }
-          : {}),
-      });
       store.set({ versusLayout: null });
     }
     scene.setLayout(layout, cols);
@@ -255,7 +277,11 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     });
   };
   relayout();
-  scene.app.renderer.on('resize', relayout);
+  prewarmLayouts();
+  scene.app.renderer.on('resize', () => {
+    relayout();
+    prewarmLayouts();
+  });
   const setLayoutMode = (mode: LayoutMode): void => {
     layoutMode = mode;
     relayout();
@@ -374,8 +400,16 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     else if (sim.gameOver) enterGameOver();
   };
 
+  /** Perf probe (`api.perf`): time spent in `onTick` during the current frame. */
+  let profiling = false;
+  let tickMs = 0;
   const loop = new GameLoop({
-    onTick,
+    onTick: () => {
+      if (!profiling) return onTick();
+      const t = performance.now();
+      onTick();
+      tickMs += performance.now() - t;
+    },
     onRender(alpha, dt) {
       const sim = session.sim;
       const hints = session.gesture.hints;
@@ -839,6 +873,63 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         if (!layout) return { x: 0, y: 0 };
         const geo = geometryForSim(layout, session.sim);
         return cellCenter(layout, row, col, geo.riseOffsetPx / layout.cellSize);
+      },
+    };
+    /** Worst-case feedback a big chain produces (bursts, popups, shake, flash), every 20 frames. */
+    const injectStress = (frame: number): void => {
+      const sim = session.sim;
+      const { rows, cols, colors } = sim.config;
+      const big = frame % 20 === 0;
+      if (!big && frame % 7 !== 0) return;
+      const chain = big ? 5 : 1;
+      for (let k = 0; k < (big ? 4 : 3); k++) {
+        const row = (frame + k * 3) % rows;
+        const col = (frame + k) % cols;
+        scene.burst(sim, row, col, (frame + k) % colors, chain);
+      }
+      if (big) {
+        scene.popup(sim, 'CHAIN ×5', rows / 2, cols / 2, 'chain', 1);
+        scene.popup(sim, '+12 345', rows / 2 - 1, cols / 2, 'score', 0.7);
+        scene.shake(chainShake(chain));
+        scene.flash('chain');
+        scene.excite(1);
+      }
+    };
+    const countObjects = (c: Container): number =>
+      c.children.reduce((n, ch) => n + 1 + countObjects(ch), 0);
+    api.perf = {
+      async profile({ frames = 600, stress = false } = {}) {
+        const samples: FrameSample[] = [];
+        let peakParticles = 0;
+        let peakPopups = 0;
+        const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+        profiling = true;
+        try {
+          for (let i = 0; i < frames; i++) {
+            await nextFrame();
+            if (stress) injectStress(i);
+            tickMs = 0;
+            const t0 = performance.now();
+            loop.frame(1000 / 60);
+            const t1 = performance.now();
+            scene.app.render();
+            const t2 = performance.now();
+            // Preact flushes renders queued during the tick in a microtask; this runs after it.
+            await Promise.resolve();
+            const t3 = performance.now();
+            samples.push({ sim: tickMs, update: t1 - t0 - tickMs, draw: t2 - t1, ui: t3 - t2 });
+            const fx = scene.effectCounts;
+            peakParticles = Math.max(peakParticles, fx.particles);
+            peakPopups = Math.max(peakPopups, fx.popups);
+          }
+        } finally {
+          profiling = false;
+        }
+        return summarizeSamples(samples, {
+          peakParticles,
+          peakPopups,
+          displayObjects: countObjects(scene.app.stage),
+        });
       },
     };
     api.run = runMode.testApi;

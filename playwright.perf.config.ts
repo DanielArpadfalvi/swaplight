@@ -2,14 +2,14 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, defineConfig, devices } from '@playwright/test';
 
+/**
+ * Perf pass (`npm run test:perf`): frame-time budgets under CPU throttling
+ * (`tests/e2e/perf.spec.ts`, method and numbers in `docs/PERF.md`). Kept out of the default e2e run
+ * (`playwright.config.ts` ignores `perf.spec.ts`): timings are only meaningful with one worker and
+ * nothing else competing for the CPU.
+ */
 const PORT = 4173;
 
-/**
- * The cloud dev container ships a preinstalled Chromium under PLAYWRIGHT_BROWSERS_PATH
- * (/opt/pw-browsers) whose build may not match the installed @playwright/test version.
- * If Playwright's expected binary is missing, fall back to the preinstalled one.
- * In CI, `npx playwright install` provides the matching build, so this is a no-op there.
- */
 function resolveChromiumExecutable(): string | undefined {
   if (existsSync(chromium.executablePath())) return undefined;
   const root = process.env.PLAYWRIGHT_BROWSERS_PATH ?? '/opt/pw-browsers';
@@ -21,17 +21,14 @@ const executablePath = resolveChromiumExecutable();
 
 export default defineConfig({
   testDir: 'tests/e2e',
-  // Store screenshots and the perf pass run separately (`npm run store:screens`,
-  // `npm run test:perf`; playwright.store.config.ts, playwright.perf.config.ts).
-  testIgnore: ['store-screens.spec.ts', 'perf.spec.ts'],
+  testMatch: 'perf.spec.ts',
   outputDir: 'test-results',
-  fullyParallel: true,
-  forbidOnly: !!process.env.CI,
+  fullyParallel: false,
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  reporter: 'list',
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
-    trace: 'retain-on-failure',
   },
   projects: [
     {

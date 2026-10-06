@@ -154,14 +154,16 @@ interface RolloutResult {
 /**
  * Real rollout on a clone: issue `swaps` (rows relative to `from.stats.rowsRisen`)
  * at the given ticks, then run until the board is calm again (or `horizon`).
- * Returns null if a swap would be rejected.
+ * Returns null if a swap would be rejected. Yields whenever the tick's work budget is
+ * spent (a rollout can run hundreds of steps; finishing it in one tick would stall a
+ * frame on slow phones).
  */
-function rollout(
+function* rollout(
   from: SimState,
   swaps: readonly SwapRef[],
   ticks: readonly number[],
   ctx: SearchContext,
-): RolloutResult | null {
+): Generator<void, RolloutResult | null, void> {
   const sim = cloneSim(from);
   const { cols } = sim.config;
   const risen0 = from.stats.rowsRisen;
@@ -202,6 +204,7 @@ function rollout(
     }
     if (sim.gameOver) break;
     if (k === swaps.length && t > 4 && isCalm(sim)) break;
+    if (ctx.units >= ctx.profile.budget) yield;
   }
   if (k < swaps.length) return null;
   if (sim.chain > 1) chainAttacked += attackCells(chainGarbage(sim.chain, cols));
@@ -237,7 +240,9 @@ function countGarbage(sim: SimState): number {
  * 1. single-block drags (1..maxDrag swaps) on the static grid of `snap`;
  * 2. 2-move sequences: the best non-clearing "setup" drags × every second drag;
  * 3. the best `verify` candidates (+ a no-move baseline) are re-checked with real
- *    rollouts from the *current* live sim, with swaps spaced `actionTicks` apart.
+ *    rollouts from the *current* live sim, with swaps spaced `actionTicks` apart
+ *    (rollouts pause mid-way too, so a tick never overshoots the budget by more than
+ *    one step).
  * Returns the best verified plan if it beats the baseline, else null.
  */
 export function* planSearch(
@@ -321,7 +326,7 @@ export function* planSearch(
   for (const cand of top) maxSpan = Math.max(maxSpan, cand.swaps.length * profile.actionTicks);
   const verifyTicks = Math.ceil(((top.length + 1) * (profile.horizon + maxSpan)) / profile.budget);
   const start = Math.max(fresh.tick + verifyTicks + 1, ctx.earliest);
-  const base = rollout(fresh, [], [], ctx);
+  const base = yield* rollout(fresh, [], [], ctx);
   const baseline = base ? base.score : -1e6;
   const verified: { cand: Candidate; result: RolloutResult; ticks: number[]; swaps: SwapRef[] }[] =
     [];
@@ -330,7 +335,7 @@ export function* planSearch(
     const swaps = cand.swaps.map((s) => ({ row: s.row - shift, col: s.col }));
     if (swaps.some((s) => s.row < 0)) continue;
     const ticks = swaps.map((_, j) => start + j * profile.actionTicks);
-    const result = rollout(fresh, swaps, ticks, ctx);
+    const result = yield* rollout(fresh, swaps, ticks, ctx);
     if (result) verified.push({ cand, result, ticks, swaps });
   }
   if (verified.length === 0) return null;

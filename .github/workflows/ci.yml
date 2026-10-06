@@ -18,6 +18,8 @@ jobs:
       - run: npm run check
       - run: npm run build
       - run: npm run test:e2e
+      # Frame-time budgets under CPU throttling; alone, so nothing else competes for the CPU.
+      - run: npm run test:perf
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -16,6 +16,7 @@ Vite + TypeScript (strict) · PixiJS v8 (gameplay canvas) · Preact (DOM UI over
 - `npm run dev` – dev server
 - `npm run check` – typecheck + lint + unit tests (must pass before every commit)
 - `npm run test:e2e` – Playwright (Chromium at /opt/pw-browsers; never run `playwright install`)
+- `npm run test:perf` – frame-time budgets under CPU throttling, run alone (`docs/PERF.md`)
 - `npm run build` – production web build
 
 ## Conventions

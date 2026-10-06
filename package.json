@@ -15,6 +15,7 @@
     "test:coverage": "vitest run --coverage",
     "check": "npm run typecheck && npm run lint && npm run test",
     "test:e2e": "playwright test",
+    "test:perf": "playwright test -c playwright.perf.config.ts",
     "store:screens": "playwright test -c playwright.store.config.ts",
     "store:check": "tsx scripts/store-listing-check.ts",
     "assets": "tsx scripts/make-assets.ts && capacitor-assets generate --android --ios --assetPath resources && tsx scripts/make-assets.ts --native-post"

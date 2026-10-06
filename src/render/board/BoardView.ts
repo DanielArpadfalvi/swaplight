@@ -171,11 +171,11 @@ export class BoardView extends Container {
   private time = 0;
   private dangerLevel = 0;
 
-  constructor(renderer: Renderer, palette: Palette = NEON_PALETTE) {
+  constructor(renderer: Renderer, palette: Palette = NEON_PALETTE, textureSizes = 1) {
     super();
     this.palette = palette;
-    this.textures = new BlockTextureFactory(renderer, { palette });
-    this.slabTextures = new GarbageSlabTextures(renderer, palette);
+    this.textures = new BlockTextureFactory(renderer, { palette, maxSizes: textureSizes });
+    this.slabTextures = new GarbageSlabTextures(renderer, palette, textureSizes);
     this.glowLayer.blendMode = 'add';
     this.slabGlowLayer.blendMode = 'add';
     this.slabFx.blendMode = 'add';
@@ -205,6 +205,16 @@ export class BoardView extends Container {
     );
   }
 
+  /**
+   * Bake block textures (and with `slabs`, the common garbage slabs) for `cellSize` ahead of use
+   * (idle frames), until `outOfTime()`. Returns true when everything is ready.
+   */
+  warmup(cellSize: number, outOfTime: () => boolean, slabs = false): boolean {
+    if (!this.textures.warmupStep(cellSize, outOfTime)) return false;
+    if (!slabs) return true;
+    return !outOfTime() && this.slabTextures.warmupStep(cellSize, outOfTime);
+  }
+
   /** Number of live block sprites (tests / debugging). */
   get spriteCount(): number {
     return this.tiles.size;
@@ -215,11 +225,9 @@ export class BoardView extends Container {
     this.layout = layout;
     this.cols = cols;
     if (sizeChanged) {
-      // Unbind every sprite (live and pooled) first, then retire the old size's textures: they are
-      // destroyed one generation later, never while a sprite is still bound to them.
+      // Unbind every sprite (live and pooled): textures of the old size stay cached (modes switch
+      // back and forth between a few sizes) and may be retired later, never while still bound.
       this.unbindTextures();
-      this.textures.clear();
-      this.slabTextures.clear();
     }
     this.lockKey = '';
     this.swapLockKey = '';

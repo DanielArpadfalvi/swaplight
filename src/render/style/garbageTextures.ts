@@ -1,6 +1,6 @@
 import { BlurFilter, Container, Graphics, Rectangle } from 'pixi.js';
 import type { Renderer, Texture, FillGradient } from 'pixi.js';
-import { deferDestroy, sharedGradient } from './blockTextures';
+import { deferDestroy, sharedGradient, touchSize } from './blockTextures';
 import { mixColor, scaleColor } from './colorMath';
 import { NEON_PALETTE, type Palette } from './palette';
 
@@ -16,6 +16,17 @@ export interface SlabTextureSet {
 }
 
 const WHITE = 0xffffff;
+const SLAB_STATES: readonly SlabState[] = ['normal', 'flash'];
+/** Slabs Versus sends most often: combo garbage (3–6 × 1) and short chains (6 × 1–4). */
+const COMMON_SLABS: readonly (readonly [number, number])[] = [
+  [3, 1],
+  [4, 1],
+  [5, 1],
+  [6, 1],
+  [6, 2],
+  [6, 3],
+  [6, 4],
+];
 
 function rgba(color: number, alpha: number): string {
   const r = (color >> 16) & 0xff;
@@ -35,6 +46,10 @@ export function slabGlowPadding(cell: number): number {
  */
 export class GarbageSlabTextures {
   private readonly cache = new Map<string, SlabTextureSet>();
+  /** Cell size of each cache entry (for evicting one size). */
+  private readonly cellOf = new Map<string, number>();
+  /** Cell sizes with cached slabs, most recently used first (see `touchSize`). */
+  private readonly sizes: number[] = [];
   /** Numeric-key cache for one cell size / resolution / palette (see `get`). */
   private readonly fast = new Map<number, SlabTextureSet>();
   private fastCell = -1;
@@ -46,6 +61,8 @@ export class GarbageSlabTextures {
   constructor(
     private readonly renderer: Renderer,
     palette: Palette = NEON_PALETTE,
+    /** Cell sizes kept baked at once (see `BlockTextureFactoryOptions.maxSizes`). */
+    private readonly maxSizes = 1,
   ) {
     this.palette = palette;
   }
@@ -66,6 +83,7 @@ export class GarbageSlabTextures {
       this.fast.clear();
       this.fastCell = cell;
       this.fastResolution = this.renderer.resolution;
+      this.useCell(cell);
     }
     const fastKey = (width * 64 + height) * 2 + (state === 'flash' ? 1 : 0);
     const hit = this.fast.get(fastKey);
@@ -81,8 +99,56 @@ export class GarbageSlabTextures {
     if (!set) {
       set = this.build(width, height, cell, state);
       this.cache.set(key, set);
+      this.cellOf.set(key, cell);
     }
     return set;
+  }
+
+  private has(width: number, height: number, cell: number, state: SlabState): boolean {
+    const key = `${this.palette.name}/${width}x${height}@${cell}/${state}/${this.renderer.resolution}`;
+    return this.cache.has(key);
+  }
+
+  /**
+   * Bake the common Versus slab shapes for `cell` ahead of use, until `outOfTime()` (at least one
+   * per call). Returns true when all are cached. A slab baked on its first appearance (blurred
+   * halo) costs several frames on a slow phone.
+   */
+  warmupStep(cell: number, outOfTime: () => boolean): boolean {
+    this.useCell(cell, false);
+    let baked = false;
+    for (const [w, h] of COMMON_SLABS) {
+      for (const state of SLAB_STATES) {
+        if (this.has(w, h, cell, state)) continue;
+        if (baked && outOfTime()) return false;
+        this.lookup(w, h, cell, state);
+        baked = true;
+      }
+    }
+    return true;
+  }
+
+  private useCell(cell: number, promote = true): void {
+    for (const evicted of touchSize(this.sizes, cell, this.maxSizes, promote)) {
+      const doomed: { destroy(): void }[] = [];
+      for (const [key, c] of this.cellOf) {
+        if (c !== evicted) continue;
+        const set = this.cache.get(key);
+        this.cache.delete(key);
+        this.cellOf.delete(key);
+        if (set) {
+          doomed.push(
+            { destroy: () => set.body.destroy(true) },
+            { destroy: () => set.glow.destroy(true) },
+          );
+        }
+      }
+      if (evicted === this.fastCell) {
+        this.fast.clear();
+        this.fastCell = -1;
+      }
+      deferDestroy(doomed);
+    }
   }
 
   /** Drop the cache; the textures live one more generation (until the next `clear`). */
@@ -96,7 +162,10 @@ export class GarbageSlabTextures {
       );
     }
     this.cache.clear();
+    this.cellOf.clear();
+    this.sizes.length = 0;
     this.fast.clear();
+    this.fastCell = -1;
     this.retired = doomed;
   }
 
@@ -110,7 +179,8 @@ export class GarbageSlabTextures {
     );
   }
 
-  private build(w: number, h: number, cell: number, state: SlabState): SlabTextureSet {
+  /** Bake one slab (overridden in tests, which have no canvas / GPU). */
+  protected build(w: number, h: number, cell: number, state: SlabState): SlabTextureSet {
     const W = w * cell;
     const H = h * cell;
     const flash = state === 'flash';
