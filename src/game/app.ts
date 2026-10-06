@@ -507,6 +507,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     loop,
     isFrozen: () => frozen,
     showToast: (text: string) => showToast(text),
+    openPaywall: (reason: PaywallReason) => paywall.open(reason),
     setLayoutMode,
     geometry,
     resetBoard() {

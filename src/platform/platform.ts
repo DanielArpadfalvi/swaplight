@@ -2,8 +2,9 @@ import { Capacitor } from '@capacitor/core';
 import { createWebClipboard, type Clipboard } from './clipboard';
 import { createHaptics, createNativeHapticsDriver, createWebHapticsDriver } from './haptics';
 import { createNativeLifecycle, createWebLifecycle } from './lifecycle';
-import { MockPurchases, type Purchases } from './purchases';
-import { RevenueCatPurchases, revenueCatApiKey } from './purchasesRevenueCat';
+import type { Purchases } from './purchases';
+import { revenueCatApiKey } from './purchasesRevenueCat';
+import { selectPurchases } from './purchasesSelect';
 import { createNativeStorage, createWebStorage } from './storage';
 import { createNativeSystemUI, createWebSystemUI } from './systemUi';
 import type { Haptics, Lifecycle, Storage, SystemUI } from './types';
@@ -38,14 +39,17 @@ export function createPlatform(options: CreatePlatformOptions = {}): Platform {
     o.haptics ?? createHaptics(native ? createNativeHapticsDriver() : createWebHapticsDriver());
   const lifecycle = o.lifecycle ?? (native ? createNativeLifecycle() : createWebLifecycle());
   const systemUi = o.systemUi ?? (native ? createNativeSystemUI() : createWebSystemUI());
-  // Real store purchases on iOS/Android when a RevenueCat key was baked into the build;
-  // the persisted mock everywhere else (web, dev, CI builds without the secret).
-  const rcKey = native
-    ? (options.revenueCatApiKey ?? revenueCatApiKey(Capacitor.getPlatform()))
-    : undefined;
+  // Real store purchases on iOS/Android when a RevenueCat key was baked into the build, an
+  // "unavailable" store on native without one, and the persisted mock on web / dev / tests.
   const purchases =
     o.purchases ??
-    (rcKey ? new RevenueCatPurchases({ apiKey: rcKey, storage }) : new MockPurchases(storage));
+    selectPurchases({
+      native,
+      apiKey: native
+        ? (options.revenueCatApiKey ?? revenueCatApiKey(Capacitor.getPlatform()))
+        : undefined,
+      storage,
+    });
   const clipboard = o.clipboard ?? createWebClipboard();
 
   return { native, storage, haptics, lifecycle, systemUi, purchases, clipboard };

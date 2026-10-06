@@ -44,6 +44,8 @@ export interface VersusModeHost {
   loop: GameLoop;
   isFrozen(): boolean;
   showToast(text: string): void;
+  /** Open the Full Version sheet (locked CPU level); falls back to a toast. */
+  openPaywall?(reason: 'versus'): void;
   setLayoutMode(mode: 'versus'): void;
   /** Current versus layout (after `setLayoutMode('versus')`). */
   versusLayout(): VersusLayout | null;
@@ -357,13 +359,22 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
     audio.playMusic('menu');
   };
 
+  /** A Full-Version-only CPU level was picked: offer the unlock. */
+  const lockedLevel = (): void => {
+    if (host.openPaywall) {
+      host.openPaywall('versus');
+      return;
+    }
+    haptics.notify('warning');
+    host.showToast(t('versus.needsFull'));
+  };
+
   const actions: VersusActions = {
     selectLevel(level) {
       audio.uiTap();
       if (!isCpuLevel(level)) return;
       if (!versusLevelAvailable(level, store.get().fullVersion)) {
-        haptics.notify('warning');
-        host.showToast(t('versus.needsFull'));
+        lockedLevel();
         return;
       }
       haptics.selection();
@@ -378,7 +389,7 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
       void audio.unlock();
       const { level, format } = store.get().versusSetup;
       if (!versusLevelAvailable(level, store.get().fullVersion)) {
-        host.showToast(t('versus.needsFull'));
+        lockedLevel();
         return;
       }
       startMatch(host.randomSeed(), level, format);

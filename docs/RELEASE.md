@@ -182,9 +182,12 @@ várja – pontosan így vedd fel őket.
 Hogyan működik: a natív build a RevenueCat Capacitor pluginnal beszél (anonim felhasználói
 azonosító, nincs bejelentkezés). A legutóbbi jogosultság-állapotot a készülék elmenti, így a
 megvett Teljes verzió **offline is** feloldva marad a következő indításkor; online a RevenueCat
-válasza az irányadó (pl. visszatérítés után újra zárol). Ha a buildben **nincs RevenueCat-kulcs**,
-vagy weben fut, a játék a teszt-boltot (`MockPurchases`) használja – ilyen buildet **nem szabad**
-kiadni, mert abban a vásárlás ingyenes. A release jobok ilyenkor figyelmeztetést írnak ki.
+válasza az irányadó (pl. visszatérítés után újra zárol). Weben (dev, e2e)
+a játék a teszt-boltot (`MockPurchases`) használja. Ha a natív buildben **nincs RevenueCat-kulcs**,
+a játék **nem** a teszt-boltra vált (az ingyen feloldana), hanem „nem elérhető” boltot használ:
+a Teljes verzió ablak „az áruház nem érhető el” állapotot mutat, a vásárlás mindig sikertelen, és
+csak egy korábbi valódi boltkapcsolat elmentett jogosultsága számít. Ilyen buildet nem szabad
+kiadni, mert abban nem lehet vásárolni – a release jobok ilyenkor figyelmeztetést írnak ki.
 
 ### 5.1 Előfeltételek
 - App Store Connect: a **Paid Applications Agreement** elfogadva, adó- és bankadatok kitöltve

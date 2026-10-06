@@ -9,6 +9,7 @@ import {
   RevenueCatPurchases,
   type RevenueCatPlugin,
   type Storage,
+  UnavailablePurchases,
 } from '../../../src/platform';
 
 type Info = { entitlements: { active: Record<string, unknown> } };
@@ -227,7 +228,7 @@ describe('revenueCatApiKey / createPlatform selection', () => {
     expect(revenueCatApiKey('ios', { VITE_RC_API_KEY_IOS: '  ' })).toBeUndefined();
   });
 
-  it('uses RevenueCat on native with a key, the mock otherwise', () => {
+  it('uses RevenueCat on native with a key, never the mock on native, the mock on web', () => {
     const storage = createMemoryStorage();
     const overrides = {
       storage,
@@ -242,7 +243,9 @@ describe('revenueCatApiKey / createPlatform selection', () => {
     expect(
       createPlatform({ native: true, revenueCatApiKey: 'goog_x', overrides }).purchases,
     ).toBeInstanceOf(RevenueCatPurchases);
-    expect(createPlatform({ native: true, overrides }).purchases).toBeInstanceOf(MockPurchases);
+    const keyless = createPlatform({ native: true, overrides }).purchases;
+    expect(keyless).toBeInstanceOf(UnavailablePurchases);
+    expect(keyless).not.toBeInstanceOf(MockPurchases);
     expect(
       createPlatform({ native: false, revenueCatApiKey: 'goog_x', overrides }).purchases,
     ).toBeInstanceOf(MockPurchases);

@@ -22,5 +22,7 @@ export {
   revenueCatApiKey,
 } from './purchasesRevenueCat';
 export type { RevenueCatOptions, RevenueCatPlugin } from './purchasesRevenueCat';
+export { STORE_UNAVAILABLE_ERROR, UnavailablePurchases, selectPurchases } from './purchasesSelect';
+export type { SelectPurchasesOptions } from './purchasesSelect';
 export { createPlatform } from './platform';
 export type { CreatePlatformOptions, Platform } from './platform';

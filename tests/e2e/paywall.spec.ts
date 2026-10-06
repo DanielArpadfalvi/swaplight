@@ -69,8 +69,8 @@ test('locked deck → paywall → buy → unlocked and persisted after reload', 
   await page.getByTestId('brightness-2').click();
   await expect(page.getByTestId('paywall-reason')).toContainText('Brightness');
 
-  // Buy with a little store latency: busy state, then the celebration.
-  await page.evaluate(() => window.__swaplight!.purchases!.setLatency(600));
+  // Buy with store latency (long enough to observe the busy state on a loaded CI box).
+  await page.evaluate(() => window.__swaplight!.purchases!.setLatency(2000));
   await page.getByTestId('paywall-buy').click();
   await expect(page.getByTestId('paywall-buy')).toBeDisabled();
   await expect(page.getByTestId('paywall')).toHaveAttribute('data-status', 'buying');
@@ -153,5 +153,69 @@ test('settings entry, Hungarian paywall', async ({ page }) => {
   await page.getByTestId('paywall-close').click();
   await expect(page.getByTestId('paywall')).toHaveCount(0);
   await expect(page.getByTestId('settings')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('locked puzzle pack → paywall → buy → pack opens', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors = trackErrors(page);
+  await boot(page);
+
+  await page.getByTestId('mode-puzzles').click();
+  await expect(page.getByTestId('puzzle-packs')).toBeVisible();
+  await expect(page.getByTestId('puzzle-pack-2')).toHaveAttribute('data-locked', 'true');
+  await page.getByTestId('puzzle-pack-2').click();
+  await expect(page.getByTestId('paywall')).toBeVisible();
+  await expect(page.getByTestId('paywall-reason')).toContainText('puzzle pack');
+  expect((await state(page)).screen).toBe('puzzlePacks');
+
+  await page.getByTestId('paywall-buy').click();
+  await expect(page.getByTestId('paywall-success')).toBeVisible();
+  await page.getByTestId('paywall-done').click();
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
+
+  // Reactive gating: every pack is open now and pack 2 shows its levels.
+  for (const p of [2, 3, 4]) {
+    await expect(page.getByTestId(`puzzle-pack-${p}`)).toHaveAttribute('data-locked', 'false');
+  }
+  await page.getByTestId('puzzle-pack-2').click();
+  await expect(page.getByTestId('puzzle-levels')).toBeVisible();
+  expect((await state(page)).screen).toBe('puzzleLevels');
+  expect((await saveData(page)).fullVersion).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('locked Daily / Versus Hard → paywall → buy → both playable', async ({ page }) => {
+  test.setTimeout(90_000);
+  const errors = trackErrors(page);
+  await boot(page);
+
+  // Daily menu card opens the sheet instead of starting.
+  await page.getByTestId('mode-daily').click();
+  await expect(page.getByTestId('paywall')).toBeVisible();
+  await expect(page.getByTestId('paywall-reason')).toContainText('Daily Challenge');
+  expect((await state(page)).screen).toBe('menu');
+  await page.evaluate(() => window.__swaplight!.back());
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
+
+  // Versus Hard: same sheet, then buy from there.
+  await page.getByTestId('mode-versus').click();
+  await expect(page.getByTestId('versus-setup')).toBeVisible();
+  await page.getByTestId('vs-level-3').click();
+  await expect(page.getByTestId('paywall-reason')).toContainText('difficulty');
+  await page.getByTestId('paywall-buy').click();
+  await expect(page.getByTestId('paywall-success')).toBeVisible();
+  await page.getByTestId('paywall-done').click();
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
+  await page.getByTestId('vs-level-3').click();
+  await expect(page.getByTestId('vs-level-3')).toHaveAttribute('aria-checked', 'true');
+
+  // Daily starts now that the Full Version is owned.
+  await page.evaluate(() => window.__swaplight!.back());
+  await expect(page.getByTestId('start-screen')).toBeVisible();
+  await expect(page.getByTestId('mode-daily')).toHaveClass(/mode-playable/);
+  await page.getByTestId('mode-daily').click();
+  await expect(page.getByTestId('daily-intro')).toBeVisible();
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
