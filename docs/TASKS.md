@@ -12,9 +12,9 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 - [x] **T1.3 Scoring & replay** – base × mult scoring hooks (extensible for relics), input log + replay; tests: determinism (same seed+inputs ⇒ same state hash), chain/combo scenarios.
 
 ## M2 – Playable prototype
-- [ ] **T2.1 Renderer** – Pixi board view with interpolation from core state, neon block shapes per color, preview row dimmed, rise offset smooth.
+- [x] **T2.1 Renderer** – Pixi board view with interpolation from core state, neon block shapes per color, preview row dimmed, rise offset smooth.
 - [x] **T2.2 Touch input** – drag block horizontally to swap (multi-swap while dragging), swipe-up/hold to raise, pointer events, works with mouse too.
-- [ ] **T2.3 Endless mode + HUD** – score, chain/combo popups, speed level, game over screen, restart. AC: Playwright test plays scripted swaps; screenshots reviewed.
+- [x] **T2.3 Endless mode + HUD** – score, chain/combo popups, speed level, game over screen, restart. AC: Playwright test plays scripted swaps; screenshots reviewed.
 
 ## M3 – Game feel
 - [ ] T3.1 Particles, glow filters, screen shake, chain popups

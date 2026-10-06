@@ -1,0 +1,83 @@
+import { createSim, step } from '../core/sim';
+import type { SimEvent, SimInput, SimState } from '../core/types';
+import type { BoardGeometry } from '../input/geometry';
+import { GestureController } from '../input/gesture';
+import { KeyboardController } from '../input/keyboard';
+import { createSimView } from '../input/simView';
+
+/**
+ * One Endless game: the sim plus its input controllers. Pure logic (no DOM / Pixi): the host binds
+ * pointer/keyboard events to `gesture` / `keyboard` and calls `tick(now)` at 60 Hz.
+ *
+ * Raise commands of both controllers are merged into a single held state, so releasing Shift does
+ * not cancel a finger that still holds the raise (and vice versa).
+ */
+export class EndlessSession {
+  sim: SimState;
+  readonly gesture: GestureController;
+  readonly keyboard: KeyboardController;
+  /** Number of events of each type seen since the game started (tests / debugging). */
+  readonly eventCounts: Partial<Record<SimEvent['type'], number>> = {};
+  /** Events of the last tick (reused array). */
+  readonly events: SimEvent[] = [];
+  private pending: SimInput[] = [];
+  private raiseSent = false;
+  /** The keyboard was used this game (show its cursor). */
+  keyboardActive = false;
+
+  constructor(
+    seed: string,
+    private readonly getGeometry: () => BoardGeometry | null,
+  ) {
+    this.sim = createSim(seed, {}, 'endless');
+    const view = createSimView(() => this.sim);
+    this.gesture = new GestureController(view);
+    this.keyboard = new KeyboardController(view);
+  }
+
+  get seed(): string {
+    return String(this.sim.seed);
+  }
+
+  restart(seed: string): void {
+    this.sim = createSim(seed, {}, 'endless');
+    this.gesture.reset();
+    this.gesture.takeCommands();
+    this.gesture.takeUiEvents();
+    this.keyboard.releaseAll();
+    this.keyboard.takeCommands();
+    this.keyboard.update();
+    this.pending = [];
+    this.raiseSent = false;
+    this.keyboardActive = false;
+    for (const k of Object.keys(this.eventCounts)) delete this.eventCounts[k as SimEvent['type']];
+  }
+
+  /** Queue a command for the next tick (test hooks, scripted input). */
+  queue(input: SimInput): void {
+    this.pending.push(input);
+  }
+
+  /** Advance one fixed tick; returns this tick's events (valid until the next call). */
+  tick(now: number): SimEvent[] {
+    const geo = this.getGeometry();
+    this.gesture.update(now, geo ?? undefined);
+    this.keyboard.update();
+    const inputs: SimInput[] = [];
+    for (const c of this.gesture.takeCommands()) if (c.type === 'swap') inputs.push(c);
+    const keys = this.keyboard.takeCommands();
+    if (keys.length > 0) this.keyboardActive = true;
+    for (const c of keys) if (c.type === 'swap') inputs.push(c);
+    for (const c of this.pending) inputs.push(c);
+    this.pending = [];
+    const raise = this.gesture.hints.raising || this.keyboard.isRaising;
+    if (raise !== this.raiseSent) {
+      inputs.push({ type: 'raise', active: raise });
+      this.raiseSent = raise;
+    }
+    this.events.length = 0;
+    step(this.sim, inputs, undefined, this.events);
+    for (const e of this.events) this.eventCounts[e.type] = (this.eventCounts[e.type] ?? 0) + 1;
+    return this.events;
+  }
+}

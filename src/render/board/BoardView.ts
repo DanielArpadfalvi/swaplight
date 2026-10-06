@@ -1,0 +1,442 @@
+import { Container, FillGradient, Graphics, Sprite, Texture } from 'pixi.js';
+import type { Renderer } from 'pixi.js';
+import { riseFraction } from '../../core/sim';
+import type { BlockKind as CoreBlockKind, CellRef, SimState } from '../../core/types';
+import { blockRenderPos, dangerColumns } from '../../core/view';
+import {
+  BlockTextureFactory,
+  blockGlowPadding,
+  type BlockKind as TexKind,
+  type BlockState as TexState,
+  type BlockTextureSet,
+} from '../style/blockTextures';
+import { mixColor } from '../style/colorMath';
+import { NEON_PALETTE, type Palette } from '../style/palette';
+import type { GameLayout } from './layout';
+import { PositionTrack } from './interp';
+
+/** Per-frame inputs that are not part of the sim. */
+export interface BoardRenderHints {
+  /** Block under the player's finger (gesture controller). */
+  heldBlockId: number | null;
+  /** Keyboard cursor (left cell of the 2-wide pair), or null when hidden. */
+  cursor: CellRef | null;
+  /** The stack is being raised manually. */
+  raising: boolean;
+}
+
+interface Tile {
+  glow: Sprite;
+  body: Sprite;
+  seen: number;
+}
+
+const TEX_KIND: Record<CoreBlockKind, TexKind> = {
+  normal: 'color',
+  garbage: 'garbage',
+  wild: 'wild',
+  bomb: 'bomb',
+};
+
+/** Matched blocks alternate normal / white-hot every N ticks. */
+const FLASH_PERIOD_TICKS = 3;
+
+/**
+ * Pixi view of the board. Reads the sim (never mutates it), tracks sprites by block id with a pool
+ * and interpolates every block between the previous and the current tick (`captureTick` after each
+ * simulation step, `render(alpha)` once per frame).
+ *
+ * Layers (back → front): well + danger columns → [masked: halos (additive) → bodies → held ring]
+ * → preview fade → neon frame → keyboard cursor.
+ */
+export class BoardView extends Container {
+  readonly textures: BlockTextureFactory;
+  private palette: Palette;
+  private layout: GameLayout | null = null;
+
+  private readonly well = new Graphics();
+  private readonly dangerLayer = new Container();
+  private readonly dangerStrips: Sprite[] = [];
+  private readonly content = new Container();
+  private readonly glowLayer = new Container();
+  private readonly bodyLayer = new Container();
+  private readonly held = new Graphics();
+  private readonly mask_ = new Graphics();
+  private readonly previewFade = new Graphics();
+  private readonly frame = new Graphics();
+  private readonly frameHot = new Graphics();
+  private readonly cursorGfx = new Graphics();
+  private fadeGradient: FillGradient | null = null;
+  private frameGradient: FillGradient | null = null;
+
+  private readonly tiles = new Map<number, Tile>();
+  private readonly pool: Tile[] = [];
+  private readonly track = new PositionTrack();
+  private frameNo = 0;
+  private time = 0;
+  private dangerLevel = 0;
+
+  constructor(renderer: Renderer, palette: Palette = NEON_PALETTE) {
+    super();
+    this.palette = palette;
+    this.textures = new BlockTextureFactory(renderer, { palette });
+    this.glowLayer.blendMode = 'add';
+    this.content.addChild(this.glowLayer, this.bodyLayer, this.held);
+    this.content.mask = this.mask_;
+    this.addChild(
+      this.well,
+      this.dangerLayer,
+      this.content,
+      this.mask_,
+      this.previewFade,
+      this.frameHot,
+      this.frame,
+      this.cursorGfx,
+    );
+  }
+
+  /** Number of live block sprites (tests / debugging). */
+  get spriteCount(): number {
+    return this.tiles.size;
+  }
+
+  setLayout(layout: GameLayout, cols: number): void {
+    const sizeChanged = this.layout?.cellSize !== layout.cellSize;
+    this.layout = layout;
+    if (sizeChanged) this.textures.clear();
+    this.drawStatic(cols);
+  }
+
+  /** Forget interpolation history (new game / board replaced). */
+  resetTracking(): void {
+    this.track.clear();
+  }
+
+  /** Record block positions after a simulation step (call after every `step`). */
+  captureTick(sim: SimState): void {
+    const t = this.track;
+    t.begin();
+    const { rows, cols } = sim.config;
+    const rise = riseFraction(sim);
+    for (let i = 0; i < sim.cells.length; i++) {
+      const p = blockRenderPos(sim, i);
+      if (p) t.set(p.id, p.row - rise, p.col);
+    }
+    for (let c = 0; c < sim.preview.length && c < cols; c++) {
+      const b = sim.preview[c];
+      if (b) t.set(b.id, rows - rise, c);
+    }
+  }
+
+  render(sim: SimState, alpha: number, dt: number, hints: BoardRenderHints): void {
+    const layout = this.layout;
+    if (!layout) return;
+    this.time += dt;
+    this.frameNo++;
+    const frame = this.frameNo;
+    const cell = layout.cellSize;
+    const { rows, cols, landTicks } = sim.config;
+    const rise = riseFraction(sim);
+    const danger = dangerColumns(sim);
+    const pinned = sim.danger;
+    this.dangerLevel += ((pinned ? 1 : danger.length > 0 ? 0.45 : 0) - this.dangerLevel) * 0.12;
+    const t = this.time;
+    let heldPos: { x: number; y: number } | null = null;
+
+    for (let i = 0; i < sim.cells.length; i++) {
+      const b = sim.cells[i];
+      if (!b) continue;
+      const p = blockRenderPos(sim, i);
+      if (!p) continue;
+      if (p.state === 'popped' && p.popProgress >= 1) continue;
+      const pos = this.track.get(b.id, alpha);
+      const sr = pos ? pos.row : p.row - rise;
+      const sc = pos ? pos.col : p.col;
+
+      let state: TexState = 'normal';
+      let scaleX = 1;
+      let scaleY = 1;
+      let alphaV = 1;
+      let tint = 0xffffff;
+      let dy = 0;
+      let dx = 0;
+      if (p.state === 'matched') {
+        state = Math.floor(sim.tick / FLASH_PERIOD_TICKS) % 2 === 0 ? 'flash' : 'normal';
+      } else if (p.state === 'popping') {
+        tint = 0x9c98b8;
+      } else if (p.state === 'popped') {
+        const k = p.popProgress;
+        state = 'flash';
+        scaleX = scaleY = 1 + 0.35 * k;
+        alphaV = 1 - k * k;
+      } else if (p.state === 'landing' && landTicks > 0) {
+        // Subtle squash on landing, anchored to the bottom edge.
+        const k = 1 - b.timer / landTicks;
+        const s = Math.sin(Math.PI * k) * (1 - k * 0.5);
+        scaleY = 1 - 0.1 * s;
+        scaleX = 1 + 0.06 * s;
+        dy = (cell * (1 - scaleY)) / 2;
+      }
+      const col = Math.max(0, Math.min(cols - 1, Math.round(sc)));
+      if (danger.includes(col) && p.state !== 'popped' && p.state !== 'matched') {
+        if (pinned) {
+          dx = Math.sin(t * 46 + col * 1.7) * cell * 0.035;
+          tint = mixColor(0xffffff, this.palette.ui.danger, 0.18 + 0.12 * Math.sin(t * 12));
+        } else {
+          dy -= Math.abs(Math.sin(t * 7 + col * 0.6)) * cell * 0.05;
+        }
+      }
+      if (b.id === hints.heldBlockId) {
+        scaleX *= 1.07;
+        scaleY *= 1.07;
+      }
+      const x = layout.originX + (sc + 0.5) * cell + dx;
+      const y = layout.originY + (sr + 0.5) * cell + dy;
+      if (b.id === hints.heldBlockId) heldPos = { x, y };
+      this.place(b.id, TEX_KIND[b.kind], b.color, state, x, y, scaleX, scaleY, alphaV, tint, frame);
+    }
+
+    for (let c = 0; c < sim.preview.length && c < cols; c++) {
+      const b = sim.preview[c];
+      if (!b) continue;
+      const pos = this.track.get(b.id, alpha);
+      const sr = pos ? pos.row : rows - rise;
+      const x = layout.originX + (c + 0.5) * cell;
+      const y = layout.originY + (sr + 0.5) * cell;
+      this.place(b.id, TEX_KIND[b.kind], b.color, 'dimmed', x, y, 1, 1, 1, 0xffffff, frame);
+    }
+
+    // Release sprites of blocks that are gone.
+    for (const [id, tile] of this.tiles) {
+      if (tile.seen === frame) continue;
+      tile.glow.visible = false;
+      tile.body.visible = false;
+      this.tiles.delete(id);
+      this.pool.push(tile);
+    }
+
+    this.drawHeld(heldPos, cell);
+    this.drawCursor(hints.cursor, rise, cell);
+    this.drawDanger(danger, pinned, cell);
+  }
+
+  private place(
+    id: number,
+    kind: TexKind,
+    color: number,
+    state: TexState,
+    x: number,
+    y: number,
+    sx: number,
+    sy: number,
+    alpha: number,
+    tint: number,
+    frame: number,
+  ): void {
+    const layout = this.layout;
+    if (!layout) return;
+    let tile = this.tiles.get(id);
+    if (!tile) {
+      tile = this.pool.pop() ?? this.newTile();
+      this.tiles.set(id, tile);
+    }
+    tile.seen = frame;
+    const set: BlockTextureSet = this.textures.get({ kind, color, state, size: layout.cellSize });
+    const { glow, body } = tile;
+    if (body.texture !== set.body) body.texture = set.body;
+    if (glow.texture !== set.glow) glow.texture = set.glow;
+    body.visible = glow.visible = true;
+    body.position.set(x, y);
+    glow.position.set(x, y);
+    body.scale.set(sx, sy);
+    glow.scale.set(sx, sy);
+    body.alpha = alpha;
+    glow.alpha = alpha;
+    body.tint = tint;
+  }
+
+  private newTile(): Tile {
+    const glow = new Sprite(Texture.EMPTY);
+    glow.anchor.set(0.5);
+    glow.blendMode = 'add';
+    const body = new Sprite(Texture.EMPTY);
+    body.anchor.set(0.5);
+    this.glowLayer.addChild(glow);
+    this.bodyLayer.addChild(body);
+    return { glow, body, seen: 0 };
+  }
+
+  private drawHeld(pos: { x: number; y: number } | null, cell: number): void {
+    const g = this.held;
+    g.clear();
+    if (!pos) return;
+    const s = cell * 1.12;
+    const r = cell * 0.2;
+    const pulse = 0.75 + 0.25 * Math.sin(this.time * 10);
+    g.roundRect(pos.x - s / 2 - 3, pos.y - s / 2 - 3, s + 6, s + 6, r + 3).stroke({
+      width: 6,
+      color: this.palette.ui.accent,
+      alpha: 0.25 * pulse,
+    });
+    g.roundRect(pos.x - s / 2, pos.y - s / 2, s, s, r).stroke({
+      width: 2.5,
+      color: mixColor(this.palette.ui.accent, 0xffffff, 0.6),
+      alpha: 0.95 * pulse,
+    });
+  }
+
+  private drawCursor(cursor: CellRef | null, rise: number, cell: number): void {
+    const g = this.cursorGfx;
+    g.clear();
+    const layout = this.layout;
+    if (!cursor || !layout) return;
+    const x = layout.originX + cursor.col * cell;
+    const y = layout.originY + (cursor.row - rise) * cell;
+    const pulse = 0.8 + 0.2 * Math.sin(this.time * 8);
+    g.roundRect(x - 3, y - 3, cell * 2 + 6, cell + 6, cell * 0.22).stroke({
+      width: 7,
+      color: 0xffffff,
+      alpha: 0.18 * pulse,
+    });
+    g.roundRect(x - 1, y - 1, cell * 2 + 2, cell + 2, cell * 0.2).stroke({
+      width: 3,
+      color: 0xffffff,
+      alpha: 0.95 * pulse,
+    });
+    g.moveTo(x + cell, y + cell * 0.2)
+      .lineTo(x + cell, y + cell * 0.8)
+      .stroke({ width: 1.5, color: 0xffffff, alpha: 0.35 });
+  }
+
+  private drawDanger(columns: readonly number[], pinned: boolean, cell: number): void {
+    const layout = this.layout;
+    if (!layout) return;
+    const pulse = 0.5 + 0.5 * Math.sin(this.time * (pinned ? 14 : 6));
+    for (let c = 0; c < this.dangerStrips.length; c++) {
+      const strip = this.dangerStrips[c];
+      if (!strip) continue;
+      const on = columns.includes(c);
+      const target = on ? (pinned ? 0.16 + 0.16 * pulse : 0.06 + 0.07 * pulse) : 0;
+      strip.alpha += (target - strip.alpha) * 0.25;
+      strip.visible = strip.alpha > 0.004;
+      strip.position.set(layout.originX + c * cell, layout.originY);
+    }
+    this.frameHot.alpha = Math.min(1, this.dangerLevel * (0.55 + 0.45 * pulse));
+  }
+
+  /** Well, grid lines, mask, preview fade and the neon frame (rebuilt on layout change). */
+  private drawStatic(cols: number): void {
+    const layout = this.layout;
+    if (!layout) return;
+    const { originX: x, originY: y, boardWidth: w, boardHeight: h, previewHeight: ph } = layout;
+    const cell = layout.cellSize;
+    const pal = this.palette;
+    const r = Math.max(6, Math.round(cell * 0.22));
+    const pad = layout.framePad;
+
+    this.well.clear();
+    // Soft drop shadow / bloom behind the panel.
+    this.well
+      .roundRect(x - pad - 10, y - pad - 10, w + 2 * pad + 20, h + ph + 2 * pad + 20, r + 10)
+      .fill({ color: 0x000000, alpha: 0.35 });
+    this.well
+      .roundRect(x - pad, y - pad, w + 2 * pad, h + ph + 2 * pad, r)
+      .fill({ color: pal.background.panel, alpha: 0.9 });
+    for (let c = 1; c < cols; c++) {
+      this.well
+        .moveTo(x + c * cell, y + 2)
+        .lineTo(x + c * cell, y + h - 2)
+        .stroke({ width: 1, color: pal.background.grid, alpha: 0.12 });
+    }
+    // Faint ceiling line (top-out boundary).
+    this.well
+      .moveTo(x + 4, y + 0.5)
+      .lineTo(x + w - 4, y + 0.5)
+      .stroke({ width: 1, color: pal.ui.danger, alpha: 0.25 });
+
+    // Danger strips: one per column, tinted, alpha animated.
+    this.dangerLayer.removeChildren();
+    this.dangerStrips.length = 0;
+    for (let c = 0; c < cols; c++) {
+      const s = new Sprite(Texture.WHITE);
+      s.tint = pal.ui.danger;
+      s.width = cell;
+      s.height = h;
+      s.alpha = 0;
+      s.visible = false;
+      s.blendMode = 'add';
+      this.dangerStrips.push(s);
+      this.dangerLayer.addChild(s);
+    }
+
+    const glowPad = blockGlowPadding(cell);
+    this.mask_.clear();
+    this.mask_
+      .rect(x - Math.min(glowPad, pad + 4), y, w + 2 * Math.min(glowPad, pad + 4), h + ph)
+      .fill(0xffffff);
+
+    // Preview strip: darken towards the bottom so the incoming row reads as "not yet active".
+    this.fadeGradient?.destroy();
+    this.fadeGradient = new FillGradient({
+      type: 'linear',
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 1 },
+      colorStops: [
+        { offset: 0, color: 'rgba(11,10,28,0.1)' },
+        { offset: 1, color: 'rgba(11,10,28,0.92)' },
+      ],
+      textureSpace: 'local',
+    });
+    this.previewFade.clear();
+    this.previewFade.rect(x, y + h, w, ph).fill(this.fadeGradient);
+    this.previewFade
+      .moveTo(x, y + h)
+      .lineTo(x + w, y + h)
+      .stroke({ width: 1.5, color: pal.ui.accent, alpha: 0.45 });
+
+    // Neon frame: soft halo strokes + a crisp gradient rim (cyan → magenta).
+    this.frameGradient?.destroy();
+    this.frameGradient = new FillGradient({
+      type: 'linear',
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 1 },
+      colorStops: [
+        { offset: 0, color: pal.ui.accent },
+        { offset: 1, color: pal.ui.accent2 },
+      ],
+      textureSpace: 'local',
+    });
+    const fx = x - pad;
+    const fy = y - pad;
+    const fw = w + 2 * pad;
+    const fh = h + ph + 2 * pad;
+    this.frame.clear();
+    this.frame.roundRect(fx - 4, fy - 4, fw + 8, fh + 8, r + 4).stroke({
+      width: 10,
+      color: pal.ui.accent,
+      alpha: 0.1,
+    });
+    this.frame.roundRect(fx - 1.5, fy - 1.5, fw + 3, fh + 3, r + 1.5).stroke({
+      width: 4,
+      color: pal.ui.accent2,
+      alpha: 0.22,
+    });
+    this.frame.roundRect(fx, fy, fw, fh, r).stroke({ width: 2.5, fill: this.frameGradient });
+    this.frame.roundRect(fx + 2, fy + 2, fw - 4, fh - 4, Math.max(2, r - 2)).stroke({
+      width: 1,
+      color: 0xffffff,
+      alpha: 0.12,
+    });
+
+    // Red rim shown while in danger (alpha animated).
+    this.frameHot.clear();
+    this.frameHot.roundRect(fx - 4, fy - 4, fw + 8, fh + 8, r + 4).stroke({
+      width: 12,
+      color: pal.ui.danger,
+      alpha: 0.28,
+    });
+    this.frameHot.roundRect(fx, fy, fw, fh, r).stroke({ width: 3, color: pal.ui.danger });
+    this.frameHot.blendMode = 'add';
+    this.frameHot.alpha = 0;
+  }
+}
