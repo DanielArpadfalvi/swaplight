@@ -169,3 +169,82 @@ Ez frissíti a `resources/` forrásképeket, a natív ikon/splash méreteket (`a
 Play kiemelt kép 1024×500). Utána a `capacitor-assets` által átformázott
 `android/app/src/main/AndroidManifest.xml`-t érdemes visszaállítani (`git checkout` – tartalmilag
 nem változik).
+
+## 5. Store-anyagok: szövegek, screenshotok, adatvédelem
+
+### 5.1 Hol mi van?
+
+> **Döntés (1.0):** az iOS app az 1.0-ban **csak iPhone-ra** készül (`TARGETED_DEVICE_FAMILY = 1`), iPaden kompatibilitási módban fut. Így iPad-screenshot nem kell az App Store-ba; az `ipad-13` képek nem szükségesek. Tablet-optimalizált UI egy későbbi verzióban jöhet.
+>
+> A store-screenshotok (~33 MB) nincsenek a gitben: `npm run store:screens` generálja őket a `store/screenshots/` mappába (kiadáskor zipként a GitHub Release-hez csatoljuk).
+
+| Anyag | Hely | Mire kell |
+|---|---|---|
+| Adatlap-szövegek EN + HU (név, alcím, rövid/hosszú leírás, kulcsszavak, promóciós szöveg, 1.0 újdonságok) | `store/listing/{en,hu}/*.txt` | App Store Connect → *App Information* / verzió oldala; Play Console → *Main store listing* (+ *Translations*: magyar) |
+| Kategória, korhatár, célközönség javaslat | `store/listing/README.md` | mindkét konzol |
+| Data safety / App Privacy / IARC / Apple Age Rating válaszok | `docs/store-privacy-answers.md` | Play → *App content*; App Store → *App Privacy*, *Age Rating* |
+| Screenshotok (keretezett, feliratos) | `store/screenshots/<cél>/<nyelv>/NN-név.png` | lásd lent |
+| Ikon, Play kiemelt kép | `store/*.png` (4. fejezet) | mindkét konzol |
+| Weboldal: főoldal, adatvédelem, támogatás (EN + HU) | `docs/site/` | GitHub Pages |
+
+**Screenshot-célok:**
+
+| Mappa | Méret | Konzolban |
+|---|---|---|
+| `ios-6.9/` | 1320 × 2868 | App Store → iPhone 6,9" (ebből a kisebb iPhone-méreteket az Apple maga skálázza) |
+| `ipad-13/` | 2064 × 2752 | App Store → iPad 13" (kötelező, mert az app iPadet is támogat – `TARGETED_DEVICE_FAMILY = 1,2`) |
+| `android/` | 1080 × 1920 | Play → *Phone screenshots* (a Play max. 2:1 oldalarányt enged, ezért 9:16-os vásznon van a 19,5:9-es kép); tabletre (*7"/10" tablet*) is feltölthetők |
+
+Sorrend (fájlnév eleje): 01 Futam lánccal · 02 Párbaj szemétblokkokkal · 03 Bolt · 04 Fejtörő ·
+05 Napi kihívás eredmény · 06 Főmenü. A magyar képeket a magyar lokalizációhoz töltsd fel.
+
+> **iPad-figyelmeztetés:** a játék felülete jelenleg nem skálázódik tabletre (a 1032 pt széles
+> nézetben a HUD és a menük telefonméretűek maradnak középen), ezért az iPad-képek gyengébbek. Két
+> út: (a) tabletes UI-skálázás a játékban (külön feladat), utána újragenerálás; (b) az 1.0 csak
+> iPhone-ra (`TARGETED_DEVICE_FAMILY = 1`), ekkor iPad-screenshot nem kell.
+
+### 5.2 Újragenerálás
+
+```bash
+npm run store:check                      # szöveghosszak, kulcsszó-formátum, védjegy-szűrés
+npm run store:screens                    # minden screenshot (3 cél × EN/HU × 6 jelenet), ~15–30 perc
+npm run store:screens -- --project=ios-6.9          # csak egy cél
+STORE_SCENES=run,shop npm run store:screens         # csak bizonyos jelenetek
+STORE_COMPOSE_ONLY=1 npm run store:screens         # csak újrakeretezés (felirat/keret módosítás után), a meglévő nyers képekből, ~1 perc
+```
+
+- A spec (`tests/e2e/store-screens.spec.ts`, config: `playwright.store.config.ts`) a **valódi
+  játékot** vezérli a `?test` hookokkal (stopolt render loop, determinisztikus léptetés), előre
+  beállított mentéssel (Teljes verzió, kész oktatás, 13 napos napi sorozat). A nyers képek a
+  `test-results/store-raw/` alá kerülnek, a keretezett végleges képek a `store/screenshots/` alá.
+- Feliratok, színek, keret: `scripts/store-frames.ts` (`SCENES`, `STORE_TARGETS`).
+- A normál `npm run test:e2e` ezt a specet kihagyja (`testIgnore`).
+- Szoftveres WebGL miatt lassú; a betűtípus az Inter (ha a gépen nincs, rendszerbetűre esik vissza).
+  Újragenerálás után **nézd át a képeket**.
+
+### 5.3 Weboldal (adatvédelmi nyilatkozat, támogatás) – GitHub Pages
+
+Egyszeri beállítás: GitHub → a repó → *Settings → Pages → Build and deployment → Source:*
+**GitHub Actions**. Utána a `.github/workflows/pages.yml` minden olyan pushnál, ami a
+`docs/site/`-ot érinti az alapértelmezett ágon, kiteszi az oldalt; kézzel is indítható
+(*Actions → Pages → Run workflow*).
+
+**Mielőtt élesbe megy:** a `docs/site/*.html` fájlokban cseréld a `CONTACT_EMAIL` helyőrzőt a
+valódi támogatási címre (pl. `sed -i 's/CONTACT_EMAIL/te@pelda.hu/g' docs/site/*.html`), és ha
+megvan, írd be a store-linkeket az `index.html` jelvényeibe.
+
+URL-ek (a repó nevéből: `DanielArpadfalvi/factcheck`; ha átnevezed a repót vagy saját domaint
+állítasz be, ezek is változnak):
+
+| Mező | URL |
+|---|---|
+| Privacy Policy URL (App Store *App Privacy*, Play *App content → Privacy policy*) | `https://danielarpadfalvi.github.io/factcheck/privacy.html` |
+| Support URL (App Store) | `https://danielarpadfalvi.github.io/factcheck/support.html` |
+| Marketing URL (App Store, opcionális) / Website (Play) | `https://danielarpadfalvi.github.io/factcheck/` |
+| Contact e-mail (Play *Store settings*) | a `CONTACT_EMAIL` helyére írt cím |
+
+Az oldal a böngésző nyelve szerint vált magyarra/angolra; fixen: `privacy.html?lang=hu`.
+Ha a játékba is bekerülnek a jogi linkek (az M8 paywall / Beállítások → Adatvédelem;
+a `src/game/paywall.ts` még nem létezik), ugyanezeket az URL-eket kell használni. A játékon
+belüli adatvédelmi szöveg (`about.privacyBody*` az i18n-ben) a RevenueCat bekötésekor
+frissítendő, hogy egyezzen a nyilatkozattal.

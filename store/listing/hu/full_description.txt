@@ -1,0 +1,45 @@
+Cserélj. Láncolj. Ragyogj.
+
+A Swaplight pörgős, neonfényben úszó blokkcserélős kirakós, roguelite szívvel. Húzd a blokkokat jobbra-balra, rakj ki legalább hármat egy színből, és nézd, ahogy a lehulló blokkok láncreakciót indítanak, a pontszámod pedig az egekbe szökik. Aztán vidd magaddal ezt a tudást a futamokba, ahol minden ereklye kicsit tovább csavarja a szabályokat.
+
+Nincs reklám. Nincs energia, nincs várakozás. Nincs szerencsedoboz. Csak egy játék, amit bárhol elővehetsz, akár internet nélkül is.
+
+AZ ALAPOK
+• Húzz oldalra egy blokkot, és helyet cserél a szomszédjával – akár üres hellyel is
+• Három vagy több azonos szín egy sorban vagy oszlopban eltűnik
+• Egyszerre 4+ blokk: COMBO! Ha a lehulló blokkok újra egyeznek: LÁNC!
+• A fal folyamatosan emelkedik – az Emelés gombot nyomva tartva te is sürgetheted
+• Minden pont ALAP × SZORZÓ, és a számok gyorsan nőnek
+
+FUTAM – A ROGUELITE MÓD
+• Három felvonás, változatos célokkal: pontszám, lánc, blokktörlés, túlélés
+• Minden felvonás végén főellenség, saját átokkal: rejtett szín, befagyott oszlop, gyorsuló fal és még sok más
+• Szikrát gyűjtesz, amit a szakaszok közti boltban költhetsz el
+• Több mint 40 ereklye: passzív képességek, amelyekből elképesztő szorzók állnak össze
+• 15 egyszer használatos talizmán: oszloptörlés, falfagyasztás, bombablokkok
+• 6 kezdőpakli és 8 Fényerő-fokozat, ha még nagyobb kihívásra vágysz
+
+TOVÁBBI MÓDOK
+• VÉGTELEN – klasszikus túlélés egyre gyorsuló tempóban. Meddig bírod?
+• PÁRBAJ – a combóid és láncaid szemétblokkokat zúdítanak a gépre. Öt nehézségi szint a lazától a könyörtelenig
+• NAPI KIHÍVÁS – minden nap ugyanaz a pálya és csavar mindenkinek. Tartsd életben a sorozatod, és oszd meg az eredményed
+• FEJTÖRŐK – 120 feladvány 4 csomagban: takarítsd le a pályát korlátozott számú cserével. Ha elakadsz, kérj tippet
+• OKTATÁS – pár perc alatt, lépésről lépésre megtanít mindenre
+
+ÉRINTŐKÉPERNYŐRE TERVEZVE
+• Pontos, egy hüvelykujjal is kényelmes húzásos irányítás
+• Éles vektoros neonlátvány, részecskék, ütős képernyőrázás
+• Generált zene és hangeffektek, amelyek minden láncszemmel magasabbra szólnak
+• Színtévesztőknek is: minden színnek saját formája van
+• Csökkentett mozgás, nagy kontrasztú színek, rezgés ki-be
+• Magyar és angol nyelven
+
+TISZTESSÉGES, EGYSZERI FELOLDÁS
+A Swaplight ingyenesen letölthető, és már az ingyenes változat is teljes értékű játék: oktatás, Végtelen mód, teljes futamok az alappaklival, Párbaj Könnyű és Normál szinten, valamint az első fejtörőcsomag.
+
+Egyetlen, nem kötelező vásárlással – ez a Teljes verzió – minden más végleg a tiéd: az összes pakli és Fényerő-fokozat, minden Párbaj-nehézség, a Napi kihívás és mind a négy fejtörőcsomag. Nincs előfizetés, nincs reklám, nincs energia, nincs pénzért vett előny. Már megvetted? A Beállításokban a „Vásárlások visszaállítása” gombbal visszakapod.
+
+AZ ADATAID NÁLAD MARADNAK
+Nincs fiók, nincs követés, nincs analitika. Az előrehaladásod a készülékeden tárolódik, a játék teljesen offline is működik.
+
+Cserélj. Láncolj. Ragyogj.
