@@ -20,20 +20,31 @@ Pure TypeScript, no DOM/Pixi, no `Math.random`/`Date.now`. A game is fully repro
 | `replay.ts`     | sparse `InputLog`, `stepRecorded`, `replay`, `hashState`                                                  |
 | `ascii.ts`      | `loadAscii` / `boardToAscii` (tests, puzzles, debugging)                                                  |
 | `invariants.ts` | `checkInvariants(sim)` – structural sanity checks                                                         |
+| `run/`          | roguelite run layer (stages, relics, charms, shop, bosses, decks, brightness) – see `run/README.md`       |
 
 State is plain data (`structuredClone`/JSON safe). `createSim` freezes `config`; `cloneSim` is a
 hand-written deep copy that shares the frozen config by reference. Run/relic parameters live in
 `sim.modifiers` (plain `Record<string, number>`, cloned and hashed). Behaviour that is not data
 goes into `SimHooks`, passed to every `step`:
 
-- `scoreModifiers` – extra `ScoreModifier`s after the built-in pipeline;
+- `scoreModifiers` – extra `ScoreModifier`s after the built-in pipeline (`ctx.sim` is the sim being
+  stepped, so stateful modifiers can keep their state in `sim.modifiers`);
 - `stopTicks(base, {sim, combo, chain})` – adjust stop time earned by a match;
 - `onClear({sim, group, colors})` – a group has popped and left the board (may mutate the sim);
 - `riseSpeed(base, sim)` – adjust the auto-rise speed.
 
-Hooks must be deterministic and must not step the same sim. Every `Block` has a `kind`
-(`'normal' | 'garbage' | 'wild' | 'bomb'`); only `normal` is generated and matching ignores the
-kind for now.
+Hooks must be deterministic and must not step the same sim.
+
+Engine-level modifier keys (absent = no effect): `swapLockUntil` – every swap is `locked` while
+`sim.tick < swapLockUntil`; `lockedColumns` – bit mask, a swap touching a set column is `locked`
+(exported as `MOD_SWAP_LOCK_UNTIL` / `MOD_LOCKED_COLUMNS`).
+
+Every `Block` has a `kind` (`'normal' | 'garbage' | 'wild' | 'bomb'`); the board only generates
+`normal` blocks (run charms/relics convert them). While a `wild` or `bomb` is on the board,
+`findMatches` takes a slower path: a **wild** is a joker – a run is a maximal line of ≥3 matchable
+blocks whose non-wild members share one color (`RRWGG` clears 5, `RWG` nothing, `WWW` clears); a
+matched **bomb** pulls every matchable block of its 3×3 neighbourhood into the same group (bombs
+caught in a blast detonate too), so a blast is one bigger combo. `garbage` still matches by color.
 
 ## Coordinates
 

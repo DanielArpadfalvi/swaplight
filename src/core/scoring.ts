@@ -1,4 +1,5 @@
 import type { SimConfig } from './config';
+import type { SimState } from './types';
 
 /**
  * Balatro-style scoring: every clear scores `base × mult`.
@@ -21,6 +22,11 @@ export interface ScoreContext {
   base: number;
   mult: number;
   readonly config: Readonly<SimConfig>;
+  /**
+   * The sim that produced the clear (set by `step`; absent when scoring standalone).
+   * Modifiers may read it and update `sim.modifiers` deterministically (stateful relics).
+   */
+  readonly sim?: SimState;
 }
 
 export type ScoreModifier = (ctx: ScoreContext) => void;
@@ -73,11 +79,12 @@ export const BASE_SCORE_PIPELINE: readonly ScoreModifier[] = Object.freeze([
   chainMultiplier,
 ]);
 
-/** Score a single clear: built-in pipeline, then `extra` modifiers in order. */
+/** Score a single clear: built-in pipeline, then `extra` modifiers in order (`sim` → `ctx.sim`). */
 export function scoreClear(
   info: ClearInfo,
   config: Readonly<SimConfig>,
   extra: readonly ScoreModifier[] = [],
+  sim?: SimState,
 ): ScoreBreakdown {
   const ctx: ScoreContext = {
     blocks: info.blocks,
@@ -88,6 +95,7 @@ export function scoreClear(
     base: 0,
     mult: 1,
     config,
+    sim,
   };
   for (const mod of BASE_SCORE_PIPELINE) mod(ctx);
   for (const mod of extra) mod(ctx);

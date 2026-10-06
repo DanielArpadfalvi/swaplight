@@ -22,10 +22,10 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 - [ ] T3.3 Haptics hook via platform layer; reduced-motion setting; perf pass (60 FPS)
 
 ## M4 – Run mode
-- [ ] T4.1 Stage goals + run structure (3 acts × 3 stages + boss), currency
-- [ ] T4.2 Relic system (effect hooks) + first 40 relics
-- [ ] T4.3 Charms (15) + shop (buy/sell/reroll)
-- [ ] T4.4 Bosses (8 curses) + decks (6) + Brightness levels 1–8
+- [x] T4.1 Stage goals + run structure (3 acts × 3 stages + boss), currency
+- [x] T4.2 Relic system (effect hooks) + first 40 relics
+- [x] T4.3 Charms (15) + shop (buy/sell/reroll)
+- [x] T4.4 Bosses (8 curses) + decks (6) + Brightness levels 1–8
 - [ ] T4.5 Run UI: stage intro, shop, relic bar, run summary
 
 ## M5 – More modes

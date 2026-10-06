@@ -256,6 +256,7 @@ export function canSwap(sim: SimState, row: number, col: number): SwapRejectReas
   const b = sim.cells[i + 1] ?? null;
   if (!a && !b) return 'empty';
   if (!isSwappable(a) || !isSwappable(b)) return 'locked';
+  if (swapLockedByModifiers(sim, col)) return 'locked';
   if (
     row > 0 &&
     (blocksSwapBelow(sim.cells[i - cols]) || blocksSwapBelow(sim.cells[i - cols + 1]))
@@ -263,6 +264,23 @@ export function canSwap(sim: SimState, row: number, col: number): SwapRejectReas
     return 'locked';
   }
   return null;
+}
+
+/**
+ * Reserved `sim.modifiers` keys read by the engine itself (run curses / charms).
+ * Absent keys have no effect.
+ */
+export const MOD_SWAP_LOCK_UNTIL = 'swapLockUntil';
+/** Bit mask of columns (bit c = column c) whose cells cannot take part in a swap. */
+export const MOD_LOCKED_COLUMNS = 'lockedColumns';
+
+/** Swaps are locked while `sim.tick < modifiers.swapLockUntil`, or when touching a locked column. */
+function swapLockedByModifiers(sim: SimState, col: number): boolean {
+  const mods = sim.modifiers;
+  const until = mods[MOD_SWAP_LOCK_UNTIL];
+  if (until !== undefined && sim.tick < until) return true;
+  const mask = mods[MOD_LOCKED_COLUMNS];
+  return mask !== undefined && ((mask >>> col) & 3) !== 0;
 }
 
 function blocksSwapBelow(above: Block | null | undefined): boolean {
@@ -458,6 +476,7 @@ function detectMatches(
     { blocks: combo, combo, chain, level: sim.level, colors },
     cfg,
     hooks.scoreModifiers,
+    sim,
   );
   sim.score += breakdown.total;
   if (!events) return;
