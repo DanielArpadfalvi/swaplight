@@ -1,0 +1,171 @@
+# Kiadás – aláírt buildek, TestFlight, Play belső teszt
+
+Ez az útmutató azt írja le, mit kell **egyszer** beállítanod ahhoz, hogy a GitHub Actions aláírt
+buildeket készítsen és feltöltse őket. Mac nem kell. A fiókok (Apple Developer, Play Console)
+létrehozása: `APP-STORE-CHECKLIST.md`, `PLAY-STORE-CHECKLIST.md`.
+
+## Mi fut magától?
+
+| Workflow | Mikor | Mit csinál | Kell hozzá secret? |
+|---|---|---|---|
+| **Android** `debug-apk` | minden push | debug APK → artifact + „android-debug-latest” pre-release | nem |
+| **Android** `release-aab` | kézi indítás, push a `main`-re, `v*` tag | aláírt AAB → artifact; opcionálisan feltöltés Google Playre | igen (lent) |
+| **iOS** `simulator` | minden push | szimulátoros build (aláírás nélkül) → artifact, bizonyítja, hogy fordul | nem |
+| **iOS** `release` | kézi indítás, push a `main`-re, `v*` tag | aláírt IPA → artifact; feltöltés TestFlightra | igen (lent) |
+
+Ha a secretek hiányoznak, a release jobok kimaradnak (a futás összefoglalójában erről egy „notice”
+üzenet szól), a többi job zöld marad.
+
+**Verziószámok:** a build-szám (Android `versionCode`, iOS `CFBundleVersion`) mindig a workflow
+futásszáma, így mindig nő. A megjelenő verzió `v1.2.3` tagnél `1.2.3`, egyébként Androidon
+`0.1.<futásszám>`, iOS-en `0.1.0`.
+
+**Secretek felvétele:** GitHub → a repó → *Settings → Secrets and variables → Actions → New
+repository secret*. (Vagy parancssorból: `gh secret set NÉV < fájl`.)
+
+---
+
+## 1. Android (Google Play)
+
+### 1.1 Feltöltő kulcs (upload key) létrehozása – egyszer
+Kell hozzá Java (JDK 17+), mert a `keytool` abban van.
+
+```bash
+keytool -genkeypair -v -keystore swaplight-upload.jks -alias upload \
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+- Kér egy jelszót (keystore jelszó) és néhány adatot (név, ország – bármi lehet).
+- **Mentsd el a `.jks` fájlt és a jelszót biztonságos helyre** (pl. jelszókezelő). Ha elveszik,
+  a Play Console-ban kérhető új upload key, de az macerás.
+
+Base64-be alakítás (egy sor szöveg lesz belőle):
+
+- Linux: `base64 -w0 swaplight-upload.jks > upload.b64`
+- macOS: `base64 -i swaplight-upload.jks | tr -d '\n' > upload.b64`
+- Windows (PowerShell): `[Convert]::ToBase64String([IO.File]::ReadAllBytes("swaplight-upload.jks")) | Set-Content upload.b64`
+
+### 1.2 GitHub secretek
+| Név | Érték |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | az `upload.b64` tartalma |
+| `ANDROID_KEYSTORE_PASSWORD` | a keystore jelszava |
+| `ANDROID_KEY_ALIAS` | `upload` |
+| `ANDROID_KEY_PASSWORD` | a kulcs jelszava (a `keytool` alapból ugyanazt használja, mint a keystore-é) |
+
+### 1.3 Első AAB és a Play Console app
+1. GitHub → *Actions → Android → Run workflow* (a `play_upload` maradjon kikapcsolva).
+2. A futás végén az *Artifacts* részből töltsd le a `swaplight-release-aab` zipet, benne az `.aab`.
+3. Play Console → *Create app* (név: Swaplight, játék, ingyenes).
+4. *Testing → Internal testing → Create new release* → a Play App Signinget fogadd el (alapértelmezett)
+   → töltsd fel az `.aab`-t → mentés → *Review release → Start rollout*.
+   Az **első** feltöltésnek kézinek kell lennie: a Play API csak már létező appba tud feltölteni.
+5. *Internal testing → Testers*: hozz létre egy e-mail-listát (Gmail-címek), és küldd el a
+   tesztelőknek a „Join on the web” linket. Ők a Play Áruházból telepítik a buildet.
+
+### 1.4 Automatikus feltöltés (opcionális, de kényelmes)
+1. Google Cloud Console (console.cloud.google.com) → új projekt (pl. „swaplight-ci”).
+2. *APIs & Services → Library* → **Google Play Android Developer API** → *Enable*.
+3. *IAM & Admin → Service Accounts → Create service account* (pl. „play-upload”), szerepkör nem kell.
+4. A service account → *Keys → Add key → Create new key → JSON* → letöltődik egy `.json` fájl.
+5. Play Console → *Users and permissions → Invite new users* → a service account e-mail-címe
+   (`…@….iam.gserviceaccount.com`) → *App permissions*: Swaplight → engedélyek: **Release to testing
+   tracks** (és ha éleset is akarsz innen: *Release to production*) → *Invite user*.
+6. GitHub secret: `PLAY_SERVICE_ACCOUNT_JSON` = a `.json` fájl **teljes tartalma**.
+
+Feltöltés: *Actions → Android → Run workflow* → `play_upload` ✓, `play_track`: `internal`,
+`play_status`: amíg az app még soha nem volt kiadva (a Console „draft app”-nak tekinti), válaszd a
+**`draft`**-ot, és a kiadást a Console-ban indítsd el (*Internal testing → Edit release → Start
+rollout*). Az első jóváhagyott kiadás után a `completed` közvetlenül kiadja a tesztelőknek.
+
+A `v*` tag (lásd 3.) automatikusan feltölt az `internal` sávra `completed` státusszal.
+
+### 1.5 Követelmények
+- `targetSdk`/`compileSdk` = 36 (Android 16) – ez megfelel a Google Play 2026-os target API
+  követelményének (`android/variables.gradle`).
+- A Play az AAB-t a saját kulcsával írja alá (Play App Signing); a te kulcsod csak a feltöltéshez kell.
+
+---
+
+## 2. iOS (TestFlight / App Store)
+
+### 2.1 Bundle ID és app rekord – egyszer
+1. developer.apple.com → *Certificates, Identifiers & Profiles → Identifiers → +* → *App IDs → App*
+   → Description: Swaplight, **Explicit** Bundle ID: `com.arpadfalvi.swaplight` → *Continue →
+   Register*. (Külön képesség nem kell; az In-App Purchase alapból be van kapcsolva.)
+2. App Store Connect → *Apps → + → New App*: iOS, név: Swaplight, elsődleges nyelv, a fenti Bundle
+   ID, SKU: `swaplight`.
+
+### 2.2 Team ID
+developer.apple.com/account → *Membership details* → **Team ID** (10 karakter).
+
+### 2.3 App Store Connect API kulcs
+1. App Store Connect → *Users and Access → Integrations → App Store Connect API → Team Keys →
+   Generate API Key* (az első kulcsnál előbb *Request Access*, az Account Holder fogadja el).
+2. Név: „GitHub CI”, Access: **Admin**. (Az aláírás felhőben kezelt terjesztési tanúsítvánnyal
+   történik – ehhez Admin szerepkör kell; „App Manager”-rel a CI-ben „Cloud signing permission
+   error” jönne.)
+3. *Download API Key* → `AuthKey_XXXXXXXXXX.p8`. **Csak egyszer tölthető le**, mentsd el!
+4. Jegyezd fel a **Key ID**-t (a kulcs sorában) és az **Issuer ID**-t (a lista fölött).
+
+Base64 a `.p8`-ból: ugyanúgy, mint 1.1-ben (`base64 -w0 AuthKey_XXXXXXXXXX.p8 > asc.b64`, macOS-en
+`base64 -i … | tr -d '\n'`, Windows-on a PowerShell-sor a fájlnévvel).
+
+### 2.4 GitHub secretek
+| Név | Érték |
+|---|---|
+| `ASC_KEY_ID` | Key ID (pl. `ABC123DEFG`) |
+| `ASC_ISSUER_ID` | Issuer ID (UUID) |
+| `ASC_KEY_P8` | az `asc.b64` tartalma |
+| `APPLE_TEAM_ID` | Team ID |
+
+Tanúsítványt, `.p12`-t, provisioning profile-t **nem** kell feltöltened: az `xcodebuild` az API
+kulccsal automatikusan létrehozza őket (a tanúsítvány az Apple felhőjében marad).
+
+### 2.5 Build TestFlightra
+1. GitHub → *Actions → iOS → Run workflow* (`testflight` ✓ – alapból be van pipálva).
+2. ~15–25 perc a build; utána az App Store Connect 5–30 percig „Processing” állapotban dolgozza fel.
+3. App Store Connect → Swaplight → *TestFlight*: megjelenik a build. Az export-megfelelőségi kérdés
+   nem jön elő (`ITSAppUsesNonExemptEncryption = NO` az Info.plistben).
+4. *Internal Testing → +* csoport → tesztelők hozzáadása (App Store Connect felhasználók, legfeljebb
+   100). Ők az iPhone-on a **TestFlight** appból telepítenek.
+5. Külső teszthez (*External Testing*, nyilvános link) az első buildnek rövid béta-review kell.
+
+A `main` ágra pusholt kód is készít aláírt IPA-t (artifactként), de **nem** tölti fel; feltöltés
+csak kézi indításnál (`testflight` ✓) vagy `v*` tagnél történik.
+
+### 2.6 Ha az iOS release job hibázik
+- *„Cloud signing permission error” / „No signing certificate”*: az API kulcs nem Admin, vagy az
+  Account Holdernek el kell fogadnia egy új Apple-szerződést (developer.apple.com → Account →
+  fent megjelenő sárga sáv; App Store Connect → *Business*).
+- *„No profiles for 'com.arpadfalvi.swaplight'”*: a Bundle ID nincs regisztrálva (2.1/1.).
+- *„The bundle version must be higher…”*: ugyanazzal a build-számmal már volt feltöltés – indítsd
+  újra a workflow-t (új futásszám).
+
+---
+
+## 3. Kiadás verziótaggel (mindkét platform egyszerre)
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+- Android: aláírt AAB `versionName 1.0.0`-val, és (ha van `PLAY_SERVICE_ACCOUNT_JSON`) feltöltés
+  az `internal` sávra.
+- iOS: aláírt IPA `1.0.0 (futásszám)` verzióval, feltöltés TestFlightra.
+- Innen a Console-okban léptetheted tovább: Play → zárt teszt / éles; App Store → *Add for Review*.
+
+## 4. Ikon és splash újragenerálása
+
+A grafika kódból készül (`scripts/make-assets.ts`, SVG → Chromium → PNG):
+
+```bash
+npm run assets
+```
+
+Ez frissíti a `resources/` forrásképeket, a natív ikon/splash méreteket (`android/…/res`,
+`ios/App/App/Assets.xcassets`) és a store-képeket (`store/`: App Store ikon 1024, Play ikon 512,
+Play kiemelt kép 1024×500). Utána a `capacitor-assets` által átformázott
+`android/app/src/main/AndroidManifest.xml`-t érdemes visszaállítani (`git checkout` – tartalmilag
+nem változik).

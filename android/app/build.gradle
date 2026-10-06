@@ -1,5 +1,15 @@
 apply plugin: 'com.android.application'
 
+// Release (upload) key: env vars in CI, or ~/.gradle/gradle.properties / -P flags locally.
+// Without them `bundleRelease` still builds, but unsigned (not uploadable).
+def releaseSecret = { String name ->
+    def value = System.getenv(name) ?: (project.findProperty(name) as String)
+    return value ? value.trim() : null
+}
+def releaseKeystorePath = releaseSecret('ANDROID_KEYSTORE_PATH')
+def hasReleaseKey = releaseKeystorePath && file(releaseKeystorePath).exists() &&
+        releaseSecret('ANDROID_KEYSTORE_PASSWORD') && releaseSecret('ANDROID_KEY_ALIAS')
+
 android {
     namespace = "com.arpadfalvi.swaplight"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -24,12 +34,23 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        if (hasReleaseKey) {
+            release {
+                storeFile file(releaseKeystorePath)
+                storePassword releaseSecret('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias releaseSecret('ANDROID_KEY_ALIAS')
+                keyPassword releaseSecret('ANDROID_KEY_PASSWORD') ?: releaseSecret('ANDROID_KEYSTORE_PASSWORD')
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
+            if (hasReleaseKey) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

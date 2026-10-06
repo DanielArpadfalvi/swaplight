@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "check": "npm run typecheck && npm run lint && npm run test",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "assets": "tsx scripts/make-assets.ts && capacitor-assets generate --android --ios --assetPath resources && tsx scripts/make-assets.ts --native-post"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
@@ -29,6 +30,7 @@
     "preact": "^11.0.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.5.2",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
@@ -40,6 +42,7 @@
     "globals": "^17.13.0",
     "happy-dom": "^20.14.5",
     "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.1",
     "vite": "^8.3.3",

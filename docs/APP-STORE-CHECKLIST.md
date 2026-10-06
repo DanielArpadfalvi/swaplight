@@ -25,8 +25,8 @@ A technikai részt (iOS build macOS-es GitHub Actions runneren, aláírási pipe
 - [ ] Új app létrehozása az App Store Connectben (név, elsődleges nyelv, bundle ID, SKU).
 
 ## 5. Aláírás és CI-feltöltés
-- [ ] **App Store Connect API kulcs** létrehozása (Users and Access → Integrations, „App Manager” szerepkör). A `.p8` fájlt, a Key ID-t és az Issuer ID-t GitHub secretként kell felvenni.
-- Ebből a CI (fastlane) automatikusan létrehozza és kezeli a tanúsítványokat és provisioning profile-okat, és feltölti a buildet TestFlightra.
+- [ ] **App Store Connect API kulcs** létrehozása (Users and Access → Integrations, **„Admin”** szerepkör – a felhőben kezelt terjesztési tanúsítványhoz ez kell). A `.p8` fájlt, a Key ID-t és az Issuer ID-t GitHub secretként kell felvenni (lépések: `docs/RELEASE.md`).
+- Ebből a CI (`xcodebuild` automatikus aláírás) létrehozza és kezeli a tanúsítványt és a provisioning profile-t, és feltölti a buildet TestFlightra.
 - Az export-megfelelőséget a build kezeli: csak szabványos titkosítást használunk, ezért `ITSAppUsesNonExemptEncryption = NO`.
 - Az Apple által aktuálisan megkövetelt Xcode/SDK verziót a CI runner biztosítja.
 
