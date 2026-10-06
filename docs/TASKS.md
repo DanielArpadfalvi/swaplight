@@ -42,7 +42,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 ## M7 – Mobile shell
 - [x] T7.1 Capacitor setup (android/ios), app id, safe areas, lifecycle pause/resume, status bar
 - [x] T7.2 Icon + splash generated from code
-- [ ] T7.3 CI workflows: Android AAB/APK, iOS build on macOS runner
+- [x] T7.3 CI workflows: Android AAB/APK, iOS build on macOS runner
 
 ## M8 – Monetization
 - [ ] T8.1 Purchases interface + mock + RevenueCat impl, entitlement gating, paywall, restore
