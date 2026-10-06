@@ -19,6 +19,7 @@ A technikai részt (build, aláírási pipeline, store-anyagok, szövegek) a fej
 - Egy korai, stabil buildet jóval az 1.0 előtt feltöltünk, hogy a 14 nap minél hamarabb elindulhasson.
 
 ## 4. App adatlap a Console-ban
+> Elkészült anyagok: szövegek `store/listing/`, screenshotok `store/screenshots/`, kérdőív-válaszok `docs/store-privacy-answers.md`, adatvédelmi/támogatási oldal `docs/site/` – lásd `docs/RELEASE.md` 5. fejezet.
 - [ ] Adatvédelmi nyilatkozat URL (elkészítem, GitHub Pages-en hosztolható).
 - [ ] Data safety űrlap (offline játék, nincs adatgyűjtés – a válaszokat előkészítem).
 - [ ] Korhatár-besorolás (IARC kérdőív – a válaszokat előkészítem).
