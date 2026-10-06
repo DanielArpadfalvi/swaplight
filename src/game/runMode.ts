@@ -42,6 +42,8 @@ export interface RunModeHost {
   /** Test hooks froze real-time stepping. */
   isFrozen(): boolean;
   showToast(text: string): void;
+  /** Open the Full Version sheet (locked deck / Brightness level); falls back to a toast. */
+  openPaywall?(reason: 'decks' | 'brightness'): void;
   /** Switch the board layout (the Run HUD is taller). */
   setLayoutMode(mode: 'endless' | 'run'): void;
   geometry(): BoardGeometry | null;
@@ -503,6 +505,10 @@ export function createRunMode(host: RunModeHost): RunMode {
     selectDeck(id) {
       audio.uiTap();
       if (!deckAvailable(id, store.get().fullVersion)) {
+        if (host.openPaywall) {
+          host.openPaywall('decks');
+          return;
+        }
         haptics.notify('warning');
         host.showToast(t('run.deckNeedsFull'));
         return;
@@ -514,6 +520,10 @@ export function createRunMode(host: RunModeHost): RunMode {
       audio.uiTap();
       const full = store.get().fullVersion;
       if (!brightnessAvailable(level, save.data.unlocks, full)) {
+        if (!full && host.openPaywall) {
+          host.openPaywall('brightness');
+          return;
+        }
         haptics.notify('warning');
         const earned = save.data.unlocks.includes(brightnessUnlockKey(level));
         host.showToast(

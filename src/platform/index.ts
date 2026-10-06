@@ -14,5 +14,13 @@ export { FULL_VERSION_PRODUCT_ID, MOCK_PURCHASES_STORAGE_KEY, MockPurchases } fr
 export type { Product, PurchaseOutcome, PurchaseResult, Purchases } from './purchases';
 export { createWebClipboard } from './clipboard';
 export type { Clipboard } from './clipboard';
+export {
+  FULL_VERSION_ENTITLEMENT_ID,
+  RC_ENTITLEMENT_CACHE_KEY,
+  RevenueCatPurchases,
+  classifyPurchaseError,
+  revenueCatApiKey,
+} from './purchasesRevenueCat';
+export type { RevenueCatOptions, RevenueCatPlugin } from './purchasesRevenueCat';
 export { createPlatform } from './platform';
 export type { CreatePlatformOptions, Platform } from './platform';

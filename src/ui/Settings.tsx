@@ -108,6 +108,18 @@ export function SettingsScreen({ state, actions, leaving, z }: Props) {
           </span>
           <span class={`dot${state.fullVersion ? ' dot-on' : ''}`} aria-hidden="true" />
         </div>
+        {!state.fullVersion && (
+          <div class="row row-stack">
+            <button
+              type="button"
+              class="btn btn-primary btn-small"
+              data-testid="settings-unlock"
+              onClick={() => actions.openPaywall('settings')}
+            >
+              {t('paywall.settingsUnlock')}
+            </button>
+          </div>
+        )}
         <div class="row row-stack">
           <button
             type="button"

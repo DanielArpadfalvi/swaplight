@@ -45,6 +45,7 @@ A technikai részt (iOS build macOS-es GitHub Actions runneren, aláírási pipe
 - [ ] Non-consumable termék létrehozása: „Teljes verzió”, kb. 4,99 USD. Kell hozzá egy review-screenshot a vásárlási képernyőről, ezt elkészítem.
 - [ ] Az első IAP-t **az app első verziójával együtt** kell beküldeni review-ra.
 - [ ] RevenueCat összekötése az App Store-ral: az In-App Purchase kulcs (.p8) feltöltése a RevenueCatbe.
+- [ ] RevenueCat termék + `full_version` entitlement + offering, és a `VITE_RC_API_KEY_IOS` GitHub secret – lépésenként: `RELEASE.md` 5. fejezet.
 - A játékban lesz „Vásárlások visszaállítása” gomb, ezt az Apple megköveteli.
 
 ## 9. Tesztelés és kiadás

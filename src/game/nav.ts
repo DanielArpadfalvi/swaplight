@@ -27,7 +27,14 @@ export type Screen =
   | 'puzzleResult';
 
 export type Overlay =
-  'settings' | 'stats' | 'collection' | 'credits' | 'privacy' | 'exitConfirm' | 'abandonConfirm';
+  | 'settings'
+  | 'stats'
+  | 'collection'
+  | 'credits'
+  | 'privacy'
+  | 'exitConfirm'
+  | 'abandonConfirm'
+  | 'paywall';
 
 /** Screens that show the board canvas (the others show only the backdrop). */
 export function showsBoard(screen: Screen): boolean {

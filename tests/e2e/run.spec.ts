@@ -61,9 +61,11 @@ test('run: deck select → map → intro → play → reward → shop → next s
   await page.getByTestId('mode-run').click();
   await expect(page.getByTestId('run-setup')).toBeVisible();
   await expect(page.getByTestId('deck-neon')).toHaveAttribute('aria-pressed', 'true');
-  // Locked deck (free version) explains itself and stays unselected.
+  // Locked deck (free version) opens the Full Version sheet and stays unselected.
   await page.getByTestId('deck-prism').click();
-  await expect(page.getByTestId('toast')).toBeVisible();
+  await expect(page.getByTestId('paywall')).toBeVisible();
+  await page.getByTestId('paywall-not-now').click();
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
   await expect(page.getByTestId('deck-neon')).toHaveAttribute('aria-pressed', 'true');
   await shot(page, 'run-setup');
 

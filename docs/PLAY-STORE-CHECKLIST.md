@@ -37,6 +37,7 @@ A technikai részt (build, aláírási pipeline, store-anyagok, szövegek) a fej
 ## 7. Egyszeri vásárlás (IAP)
 - [ ] Termék létrehozása a Console-ban: „Teljes verzió”, ~4,99 USD.
 - [ ] RevenueCat fiók (ingyenes szint) + összekötés a Play-jel service account kulccsal.
+- [ ] Termékazonosító: `swaplight_full_version`; RevenueCat entitlement `full_version`; `VITE_RC_API_KEY_ANDROID` GitHub secret; License testing a tesztelőknek – részletek: `RELEASE.md` 5. fejezet.
 
 ## 8. Kiadás
 - [ ] Belső teszt → zárt teszt (12 fő / 14 nap) → hozzáférés kérése az éles kiadáshoz → éles kiadás.
