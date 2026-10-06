@@ -33,7 +33,7 @@ Figyelem: több forrásoldal (pocketgamer.biz, Reddit, pockettactics) proxy miat
 | Dungeon Keeper-szerű | MAGAS | EA verziója gyűlölt, nincs jó utód (nagy scope) |
 | Rampart | KÖZ–MAGAS | Csak niche klónok |
 | Factorio / RimWorld / Dwarf Fortress | MAGAS | Nincs port, 10+ éve kérik; nehéz touch + teljesítmény |
-| Theme Hospital / Two Point | KÖZ | Két Point Hospital nincs mobilon; Kairosoft csak sekély |
+| Theme Hospital / Two Point | KÖZ | Two Point Hospital nincs mobilon; Kairosoft csak sekély |
 | Pinball (saját asztalok) | KÖZ | Zen Pinball World reklám-kapus |
 | Pokémon-szerű gacha nélkül | KÖZ | Coromon, Nexomon vannak, de kevés |
 | Advance Wars, SimCity, roguelike, Sokoban, Oregon Trail, Boulder Dash | ALACSONY | Wargroove 2, Pocket City, Shattered Pixel Dungeon stb. lefedik |
