@@ -171,7 +171,7 @@ describe('persistence', () => {
 
 describe('simulated runs (bot)', () => {
   it('a greedy bot wins a full run at brightness 1', () => {
-    const log = playRun(createRun('win3'), { bot: FAST_BOT, useCharms: true });
+    const log = playRun(createRun('win10'), { bot: FAST_BOT, useCharms: true });
     expect(log.run.phase).toBe('won');
     expect(log.stages).toHaveLength(12);
     expect(log.run.history.every((h) => h.won)).toBe(true);

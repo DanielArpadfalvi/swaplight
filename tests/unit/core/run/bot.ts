@@ -1,4 +1,5 @@
 import { canSwap, step } from '../../../../src/core/sim';
+import { findMatchingSwap } from '../../../e2e/support/solver';
 import type { SimInput, SimState } from '../../../../src/core/types';
 import {
   buyCharm,
@@ -123,12 +124,15 @@ export function isQuiet(sim: SimState): boolean {
   return true;
 }
 
-/** Best swap on a quiet board, or null. */
-export function bestSwap(sim: SimState, opts: BotOptions): { row: number; col: number } | null {
+/** Best swap on a quiet board, or null (`clears`: the swap itself makes a match in the model). */
+export function bestSwap(
+  sim: SimState,
+  opts: BotOptions,
+): { row: number; col: number; clears: boolean } | null {
   const { rows, cols } = sim.config;
   const base = gridOf(sim);
   const h0 = maxHeight(base, rows, cols);
-  let best: { row: number; col: number } | null = null;
+  let best: { row: number; col: number; clears: boolean } | null = null;
   let bestValue = 0;
   const work = new Int8Array(base.length);
   const work2 = new Int8Array(base.length);
@@ -145,7 +149,7 @@ export function bestSwap(sim: SimState, opts: BotOptions): { row: number; col: n
       const value = e.score + e.cleared * 2 + (h0 - h) * (h0 >= rows - 3 ? 40 : 3);
       if (value > bestValue) {
         bestValue = value;
-        best = { row: r, col: c };
+        best = { row: r, col: c, clears: e.cleared > 0 };
       }
       if (e.cleared === 0) candidates.push({ row: r, col: c, grid: work.slice() });
     }
@@ -165,7 +169,7 @@ export function bestSwap(sim: SimState, opts: BotOptions): { row: number; col: n
         const value = (e.score + e.cleared * 2) * 0.5 + (e.chain >= 2 ? 40 : 0);
         if (value > bestValue) {
           bestValue = value;
-          best = { row: cand.row, col: cand.col };
+          best = { row: cand.row, col: cand.col, clears: false };
         }
       }
     }
@@ -194,6 +198,40 @@ export function botInputs(sim: SimState, opts: BotOptions, raising: BotMemory): 
       inputs.push({ type: 'swap', row: move.row, col: move.col });
       raising.lastMove = sim.tick;
     }
+  }
+  return inputs;
+}
+
+/**
+ * "Casual" player (the QA balance bot): every `reaction` ticks it makes the first single swap
+ * that produces a match (bottom-up scan), or else taps raise when the stack is low. No drags,
+ * no planning, no chains on purpose.
+ */
+export interface CasualMemory {
+  next: number;
+  raiseUntil: number;
+  raising: boolean;
+}
+
+export function casualMemory(reaction: number): CasualMemory {
+  return { next: reaction, raiseUntil: 0, raising: false };
+}
+
+export function casualInputs(sim: SimState, reaction: number, mem: CasualMemory): SimInput[] {
+  const inputs: SimInput[] = [];
+  if (sim.tick >= mem.next) {
+    mem.next = sim.tick + reaction;
+    const m = findMatchingSwap(sim, 30);
+    if (m) inputs.push({ type: 'swap', row: m.row, col: m.col });
+    else if (!sim.danger && sim.config.rows - topRow(sim) < 6) {
+      inputs.push({ type: 'raise', active: true });
+      mem.raising = true;
+      mem.raiseUntil = sim.tick + 8;
+    }
+  }
+  if (mem.raising && sim.tick >= mem.raiseUntil) {
+    inputs.push({ type: 'raise', active: false });
+    mem.raising = false;
   }
   return inputs;
 }

@@ -31,6 +31,7 @@ A technikai részt (iOS build macOS-es GitHub Actions runneren, aláírási pipe
 - Az Apple által aktuálisan megkövetelt Xcode/SDK verziót a CI runner biztosítja.
 
 ## 6. App adatlap
+> Elkészült anyagok: szövegek `store/listing/`, screenshotok `store/screenshots/`, kérdőív-válaszok `docs/store-privacy-answers.md`, adatvédelmi/támogatási oldal `docs/site/` – lásd `docs/RELEASE.md` 6. fejezet.
 - [ ] Adatvédelmi nyilatkozat URL (elkészítem, GitHub Pages-en hosztolható).
 - [ ] **App Privacy** kérdőív: „Data Not Collected”, mert a játék offline. A válaszokat előkészítem.
 - [ ] Korhatár-kérdőív (Age Rating): a válaszokat előkészítem, várhatóan a legalacsonyabb besorolást kapja.

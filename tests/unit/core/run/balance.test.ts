@@ -1,20 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { step } from '../../../../src/core/sim';
 import {
+  CURSES,
   createRun,
   createStageSim,
+  evaluateStage,
   goalValue,
   stageConfig,
   type GoalType,
   type RunState,
 } from '../../../../src/core/run';
-import { botInputs, playRun, type BotMemory, type BotOptions } from './bot';
+import {
+  botInputs,
+  casualInputs,
+  casualMemory,
+  playRun,
+  type BotMemory,
+  type BotOptions,
+} from './bot';
 import { atStage } from './fixtures';
 
 /**
  * Balance sanity report: `BALANCE=1 npx vitest run tests/unit/core/run/balance.test.ts`.
  * 1. Value a relic-less bot reaches by each goal's time limit vs the goal target.
  * 2. Full-run win rates (bot + greedy shop) per brightness and per-slot value/target ratios.
+ * 3. Act 1 with a casual single-swap bot (`casualInputs`): win rate per slot, goal type and
+ *    act-1 boss curse. Target: ≥ 60 % on act-1 stages, ≥ 40 % on the act-1 boss.
  * Human-like bot: 2 swaps/s max, 2-ply lookahead, raises while the stack is low.
  */
 const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env;
@@ -32,6 +43,19 @@ function valueAtLimit(run: RunState, bot: BotOptions): number {
     step(sim, botInputs(sim, opts, mem), setup.hooks, null);
   }
   return goalValue(setup.goal, sim);
+}
+
+/** Play a stage with the casual bot; true if won. */
+function casualWin(run: RunState, reaction: number): boolean {
+  const setup = stageConfig(run);
+  const sim = createStageSim(setup);
+  const mem = casualMemory(reaction);
+  for (let t = 0; t < 60 * 200; t++) {
+    step(sim, casualInputs(sim, reaction, mem), setup.hooks, null);
+    const p = evaluateStage(setup.goal, sim);
+    if (p.finished) return p.won;
+  }
+  return false;
 }
 
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;
@@ -99,4 +123,43 @@ describe.skipIf(!ENABLED)('balance report', () => {
     console.log(lines.join('\n'));
     expect(lines.length).toBeGreaterThan(0);
   }, 600_000);
+
+  it('act 1: casual single-swap bot', () => {
+    const N = 16;
+    const types: GoalType[] = ['scoreInTime', 'clearBlocks', 'survive', 'chainTarget'];
+    const act1Curses = CURSES.filter((c) => (c.minAct ?? 1) <= 1).map((c) => c.id);
+    const lines = ['slot  goal                lvl  target   r120    r75'];
+    const rates: Record<string, number[]> = { stage: [], boss: [] };
+    const variants: [number, string, GoalType, string[]][] = [];
+    for (let stage = 0; stage < 3; stage++) {
+      for (const type of types) variants.push([stage, type, type, []]);
+    }
+    for (const c of act1Curses) variants.push([3, `boss+${c}`, 'scoreInTime', [c]]);
+    for (const [stage, name, goalType, curses] of variants) {
+      const cells: string[] = [];
+      let goal = stageConfig(atStage(createRun('x'), 1, stage, { goalType, curses })).goal;
+      for (const reaction of [120, 75]) {
+        let wins = 0;
+        for (let i = 0; i < N; i++) {
+          const run = atStage(createRun(`bal-${i + 1}`), 1, stage, { goalType, curses });
+          run.charms = [];
+          goal = stageConfig(run).goal;
+          if (casualWin(run, reaction)) wins++;
+        }
+        cells.push(`${String(wins).padStart(2)}/${N}`.padStart(6));
+        if (reaction === 75) rates[stage === 3 ? 'boss' : 'stage']!.push(wins / N);
+      }
+      const target = goal.type === 'survive' ? `${goal.target / 60} s` : String(goal.target);
+      lines.push(
+        `a1s${stage}  ${name.padEnd(18)}  ${String(goal.startLevel).padStart(3)}  ${target.padStart(6)}  ${cells.join('  ')}`,
+      );
+    }
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+    lines.push(
+      `r75 mean: stages ${(mean(rates.stage!) * 100).toFixed(0)} %, boss ${(mean(rates.boss!) * 100).toFixed(0)} %`,
+    );
+    console.log(lines.join('\n'));
+    expect(mean(rates.stage!)).toBeGreaterThanOrEqual(0.6);
+    expect(mean(rates.boss!)).toBeGreaterThanOrEqual(0.4);
+  }, 1_200_000);
 });

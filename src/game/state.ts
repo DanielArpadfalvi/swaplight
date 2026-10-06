@@ -155,6 +155,11 @@ export interface VersusHudState {
   armMs: number;
   /** Increments on every big incoming warning (restarts the banner). */
   warnKey: number;
+  /**
+   * Leaving now would forfeit the match (recorded as a loss): ask for confirmation first
+   * (`VersusMode.needsLeaveConfirm`).
+   */
+  needsLeaveConfirm: boolean;
 }
 
 /** Placement of the Versus overlays (from the versus layout). */

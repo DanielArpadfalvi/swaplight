@@ -51,6 +51,17 @@ export function blockGlowPadding(size: number): number {
   return Math.ceil(size * 0.42);
 }
 
+const KIND_INDEX: Readonly<Record<BlockKind, number>> = {
+  color: 0,
+  garbage: 1,
+  wild: 2,
+  bomb: 3,
+  mystery: 4,
+};
+const STATE_INDEX: Readonly<Record<BlockState, number>> = { normal: 0, dimmed: 1, flash: 2 };
+/** Colors per kind slot in the numeric fast cache (larger indices fall back to `get`). */
+const FAST_COLORS = 16;
+
 export function blockTextureKey(req: BlockTextureRequest, resolution: number): string {
   const color = req.kind === 'color' ? (req.color ?? 0) : '-';
   return `${req.kind}:${color}:${req.state ?? 'normal'}:${req.size}:${resolution}`;
@@ -77,6 +88,17 @@ interface TileColors {
  */
 export class BlockTextureFactory {
   private readonly cache = new Map<string, BlockTextureSet>();
+  /**
+   * Allocation-free per-frame lookup (`tile`): array indexed by kind × state × color for one size,
+   * palette and resolution; reset whenever any of those change.
+   */
+  private fast: (BlockTextureSet | undefined)[] = [];
+  private fastSize = -1;
+  /**
+   * The previous generation of textures (`clear`): kept alive until the next `clear` so sprites
+   * still bound to them are re-textured before anything is destroyed.
+   */
+  private retired: { destroy(): void }[] = [];
   /**
    * Gradients used while baking. They stay alive until `clear()`: destroying them right after
    * `generateTexture` trips Pixi's "destroyed while still bound" warning.
@@ -106,6 +128,7 @@ export class BlockTextureFactory {
    * back and forth is free; call `clear()` to release them.
    */
   setPalette(palette: Palette): void {
+    if (palette !== this.palette) this.fast = [];
     this.palette = palette;
   }
 
@@ -113,6 +136,26 @@ export class BlockTextureFactory {
     if (resolution === this.resolution) return;
     this.resolution = resolution;
     this.clear();
+  }
+
+  /**
+   * Same as `get({kind, color, state, size})` without building a request object or a key string
+   * (hot path: every tile, every frame).
+   */
+  tile(kind: BlockKind, color: number, state: BlockState, size: number): BlockTextureSet {
+    if (size !== this.fastSize) {
+      this.fast = [];
+      this.fastSize = size;
+    }
+    const c = kind === 'color' ? color : 0;
+    if (c < 0 || c >= FAST_COLORS) return this.get({ kind, color, state, size });
+    const i = (KIND_INDEX[kind] * 3 + STATE_INDEX[state]) * FAST_COLORS + c;
+    let set = this.fast[i];
+    if (!set) {
+      set = this.get({ kind, color, state, size });
+      this.fast[i] = set;
+    }
+    return set;
   }
 
   get(req: BlockTextureRequest): BlockTextureSet {
@@ -143,10 +186,13 @@ export class BlockTextureFactory {
   }
 
   /**
-   * Drop every cached texture. Destruction is deferred (`deferDestroy`) because sprites drawn in the
-   * current frame may still reference them; callers should swap their sprites' textures right away.
+   * Drop every cached texture. They are not destroyed yet: this generation is kept alive until the
+   * next `clear()` (one generation), because sprites – including hidden, pooled ones – may still be
+   * bound to them; destroying a texture source that is still bound makes Pixi warn ("destroyed
+   * while still bound"). Callers should re-texture their sprites right away.
    */
   clear(): void {
+    deferDestroy(this.retired);
     const doomed: { destroy(): void }[] = [...this.disposables];
     for (const set of this.cache.values()) {
       doomed.push(
@@ -155,12 +201,15 @@ export class BlockTextureFactory {
       );
     }
     this.cache.clear();
+    this.fast = [];
     this.disposables = [];
-    deferDestroy(doomed);
+    this.retired = doomed;
   }
 
   destroy(): void {
     this.clear();
+    deferDestroy(this.retired);
+    this.retired = [];
   }
 
   // --- building -------------------------------------------------------------------------------

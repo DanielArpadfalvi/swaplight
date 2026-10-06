@@ -5,7 +5,7 @@ import type { Store } from './store';
 /** Terms of Use / Privacy Policy links shown in the Full Version sheet (store requirement). */
 export const LEGAL_URLS = {
   terms: 'https://swaplight.app/terms',
-  privacy: 'https://swaplight.app/privacy',
+  privacy: 'https://danielarpadfalvi.github.io/factcheck/privacy.html',
 } as const;
 
 /** Sound / haptic hooks of the purchase flow (the app wires these to audio + haptics). */
