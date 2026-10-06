@@ -6,7 +6,7 @@ type RunContent = Pick<Dictionary, 'relic' | 'charm' | 'boss' | 'deck' | 'bright
 export const runContentHu: RunContent = {
   relic: {
     spark_plug: { name: 'Gyújtógyertya', desc: 'Minden eltüntetés +15 alappontot ad.' },
-    heavy_hand: { name: 'Nehéz kéz', desc: 'Combo (4+ blokk): blokkonként +10 alap.' },
+    heavy_hand: { name: 'Nehéz kéz', desc: 'Kombó (4+ blokk): blokkonként +10 alap.' },
     ruby_ember: { name: 'Rubinparázs', desc: 'Minden eltüntetett piros blokk +10 alap.' },
     jade_echo: { name: 'Jádevisszhang', desc: 'Zöld blokkot tartalmazó eltüntetés: +3 szorzó.' },
     sapphire_tide: {
@@ -17,7 +17,7 @@ export const runContentHu: RunContent = {
       name: 'Biztos kéz',
       desc: 'Sima eltüntetés (3 blokk, lánc nélkül): +2 szorzó.',
     },
-    lucky_four: { name: 'Szerencsenégyes', desc: 'Pontosan 4 blokkos combo: +4 szorzó.' },
+    lucky_four: { name: 'Szerencsenégyes', desc: 'Pontosan 4 blokkos kombó: +4 szorzó.' },
     slow_tide: { name: 'Lassú dagály', desc: 'A fal 20%-kal lassabban emelkedik.' },
     chronoglass: { name: 'Időüveg', desc: '+50% megszerzett megállási idő.' },
     piggy_bank: { name: 'Malacpersely', desc: 'Minden megnyert szakasz után +2 szikra.' },
@@ -48,7 +48,7 @@ export const runContentHu: RunContent = {
     },
     snowball: {
       name: 'Hógolyó',
-      desc: 'Minden 5+ blokkos combo után a futam végéig +5 alapot nyer.',
+      desc: 'Minden 5+ blokkos kombó után a futam végéig +5 alapot nyer.',
     },
     last_stand: {
       name: 'Utolsó bástya',
@@ -70,14 +70,14 @@ export const runContentHu: RunContent = {
     minimalist: { name: 'Minimalista', desc: 'Üres ereklyehelyenként +3 szorzó.' },
     domino: {
       name: 'Dominó',
-      desc: 'Minden 3. combo (4+ blokk) egy véletlen blokkot bombává alakít.',
+      desc: 'Minden 3. kombó (4+ blokk) egy véletlen blokkot bombává alakít.',
     },
     clean_sweep: {
       name: 'Tiszta lap',
       desc: '×1,5 szorzó, ha az eltüntetés után legfeljebb 18 blokk marad.',
     },
     stasis_field: { name: 'Sztázismező', desc: '+4 szorzó, amíg tart a megállás.' },
-    supernova: { name: 'Szupernóva', desc: '6+ blokkos combo: ×2 szorzó.' },
+    supernova: { name: 'Szupernóva', desc: '6+ blokkos kombó: ×2 szorzó.' },
     chain_reactor: {
       name: 'Láncreaktor',
       desc: 'Láncszemek: ×(1 + 0,25 az 1 feletti láncszintenként) szorzó.',
@@ -165,7 +165,7 @@ export const runContentHu: RunContent = {
       desc: 'Az egyik középső oszlop befagy: a blokkjai nem cserélhetők.',
     },
     spectrum: { name: 'A Spektrum', desc: 'Eggyel több blokkszín.' },
-    drought: { name: 'Az Aszály', desc: 'A combók és a láncok nem adnak megállási időt.' },
+    drought: { name: 'Az Aszály', desc: 'A kombók és a láncok nem adnak megállási időt.' },
     judge: { name: 'A Bíró', desc: 'Az eltüntetés csak fél pontot ér, ha nem része láncnak.' },
     stagger: { name: 'A Tántorgás', desc: 'Minden láncszem 1 másodpercre zárolja a cserét.' },
     shiver: {
@@ -192,7 +192,7 @@ export const runContentHu: RunContent = {
     },
     cascade: {
       name: 'Kaszkád pakli',
-      desc: 'A ×n lánc 2n−1 szorzót ad, de a combók nem kapnak combo bónuszt.',
+      desc: 'A ×n lánc 2n−1 szorzót ad, de a kombók nem kapnak kombóbónuszt.',
     },
     collector: {
       name: 'Gyűjtő pakli',

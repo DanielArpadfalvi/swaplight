@@ -63,6 +63,8 @@ export const en = {
     reducedMotionHint: 'No screen shake, fewer particles and calmer animations.',
     highContrast: 'High-contrast colors',
     highContrastHint: 'Colorblind-friendly palette with stronger contrast.',
+    largeText: 'Larger text',
+    largeTextHint: 'Bigger text in menus, panels and cards.',
     showBreakdown: 'Score breakdown',
     showBreakdownHint: 'Show “base × mult” under the score.',
     fullVersionOwned: 'Full Version unlocked',
@@ -87,7 +89,9 @@ export const en = {
       'Swaplight does not collect personal data. Your settings, scores and progress are stored only on this device.',
     privacyBody2:
       'There are no ads and no third-party tracking. Purchases are handled by the App Store or Google Play.',
-    privacyBody3: 'The full privacy policy will be published here before release.',
+    privacyBody3:
+      'Questions or a data request? Our full privacy policy, with contact details, is available online.',
+    privacyLink: 'Read the privacy policy',
   },
   common: {
     play: 'Play',
@@ -287,6 +291,8 @@ export const en = {
     durationHours: '{h} h {m} min',
     durationMinutes: '{m} min {s} s',
     empty: 'Play a game to start filling these in.',
+    puzzleStars: '{stars} / {total} ★',
+    puzzlesSolved: '{solved} / {total} solved',
   },
   collection: {
     discovered: '{found} / {total} discovered',
@@ -294,6 +300,14 @@ export const en = {
     title: 'Collection',
     soonTitle: 'Your collection awaits',
     soonBody: 'Relics, charms and bosses you discover in Run mode will appear here.',
+    tabRelics: 'Relics',
+    tabCharms: 'Charms',
+    tabBosses: 'Bosses',
+    tabDecks: 'Decks',
+    unknown: '???',
+    unknownHint: 'Find it in a run to reveal it.',
+    deckLocked: 'Unlocked with the Full Version.',
+    tapHint: 'Tap an item for details.',
   },
   ...runContentEn,
   ...versusDailyEn,

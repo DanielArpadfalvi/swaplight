@@ -129,7 +129,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.24em;
   text-transform: uppercase;
@@ -150,7 +150,7 @@
 }
 
 .pz-pack-desc {
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--fs, 1));
   line-height: 1.35;
   color: var(--text-dim);
 }
@@ -160,7 +160,7 @@
   align-items: center;
   gap: 8px;
   margin-top: 6px;
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
   font-weight: 700;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
@@ -210,7 +210,7 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   font-weight: 700;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
@@ -334,7 +334,8 @@
 /* ---------------------------------------------------------------- HUD */
 
 .pz-hud {
-  gap: 8px;
+  padding-top: 6px;
+  gap: 6px;
 }
 
 .pz-hud-top {
@@ -345,7 +346,8 @@
 }
 
 .pz-hud-title {
-  font-size: 12px;
+  min-width: 0;
+  font-size: calc(12px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.22em;
@@ -379,14 +381,16 @@
 }
 
 .pz-goal-text {
-  font-size: 16px;
+  font-size: calc(15px * var(--fs, 1));
   font-weight: 900;
   line-height: 1.15;
   color: #f4fbff;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .pz-par {
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
   font-weight: 700;
   color: var(--text-dim);
 }
@@ -398,7 +402,7 @@
 
 .pz-moves {
   flex: 0 0 auto;
-  min-width: 104px;
+  min-width: 92px;
   align-items: center;
   border-color: rgba(var(--accent-rgb), 0.6);
   box-shadow:
@@ -454,7 +458,7 @@
 .pz-wait {
   min-height: 14px;
   text-align: center;
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--gold);
@@ -478,6 +482,8 @@
 .pz-ctrl {
   pointer-events: auto;
   flex: 1 1 0;
+  min-width: 0;
+  padding: 0 4px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -485,10 +491,11 @@
   gap: 2px;
   border-radius: 16px;
   font-family: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
   font-weight: 900;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: #e9fbff;
   cursor: pointer;
   touch-action: manipulation;
@@ -720,7 +727,7 @@
 .pz-hint-text {
   margin: 0 0 6px;
   text-align: center;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   line-height: 1.5;
   color: var(--text);
 }
@@ -728,7 +735,7 @@
 .pz-hint-note {
   display: block;
   margin-top: 8px;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   color: var(--text-dim);
 }
 
@@ -748,7 +755,7 @@
 
 .pz-result-tag {
   align-self: center;
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.26em;
   text-transform: uppercase;
@@ -793,7 +800,7 @@
 .pz-result-line {
   margin: 0;
   text-align: center;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   font-weight: 700;
   color: var(--text);
 }
@@ -815,7 +822,7 @@
 .pz-criteria li {
   padding: 4px 10px;
   border-radius: 99px;
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.04em;
   border: 1px solid rgba(154, 148, 196, 0.35);
@@ -847,7 +854,7 @@
 .pz-result-row .btn {
   flex: 1 1 0;
   padding: 0 10px;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   letter-spacing: 0.08em;
 }
 
@@ -868,7 +875,7 @@
 }
 
 .tut-step {
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -904,7 +911,7 @@
   padding: 6px 12px;
   border-radius: 99px;
   font-family: inherit;
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -915,9 +922,9 @@
 }
 
 .tut-pause {
-  flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
 }
 
 .tut-card {
@@ -949,7 +956,7 @@
 
 .tut-title {
   margin: 0;
-  font-size: 18px;
+  font-size: calc(18px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.06em;
@@ -961,13 +968,13 @@
 .tut-body,
 .tut-extra {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   line-height: 1.4;
   color: var(--text);
 }
 
 .tut-extra {
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   color: #ffb3ad;
 }
 
@@ -1128,7 +1135,7 @@
 }
 
 .tut-banner-title {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.03em;
@@ -1136,6 +1143,6 @@
 }
 
 .tut-banner-body {
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   color: var(--text-dim);
 }

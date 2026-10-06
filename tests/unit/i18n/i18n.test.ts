@@ -36,6 +36,24 @@ describe('dictionaries', () => {
     }
   });
 
+  it('Hungarian copy: "kombó" spelling, no orphaned ordinals, real privacy text', () => {
+    const i18nHu = createI18n({ deviceLanguages: ['hu'] });
+    for (const key of leafKeys(hu) as TranslationKey[]) {
+      const text = i18nHu.t(key);
+      expect(text, key).not.toMatch(/combo/i);
+      // "{n}. felvonás": the ordinal is glued to its noun with a no-break space.
+      expect(text, key).not.toMatch(/\{\w+\}\. /);
+    }
+    expect(i18nHu.t('puzzle.undo')).toBe('Visszavonás');
+    expect(i18nHu.t('versus.needsFull')).toMatch(/a Teljes verzióban érhetők el\.$/);
+    expect(i18nHu.t('run.stageTitle', { act: 1, stage: 1 })).toBe(
+      '1.\u00a0felvonás · 1.\u00a0szakasz',
+    );
+    for (const dict of [en, hu]) {
+      expect(dict.about.privacyBody3).not.toMatch(/will be published|lesz elérhető/);
+    }
+  });
+
   it('rejects dictionaries with missing or extra keys at compile time', () => {
     // @ts-expect-error – missing keys must not type-check
     const missing: Dictionary = { app: { title: 'x' } };

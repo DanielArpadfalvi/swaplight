@@ -1,6 +1,8 @@
 import type { ComponentChildren } from 'preact';
 import { t } from '../i18n';
 import { IconBack } from './icons';
+import { ScrollMore } from './ScrollMore';
+import { useScrollMore } from './useScrollMore';
 
 /** Full-screen panel with a back button header and a scrollable body (settings, stats…). */
 export function Sheet({
@@ -18,6 +20,7 @@ export function Sheet({
   onBack: () => void;
   children: ComponentChildren;
 }) {
+  const [bodyRef, more] = useScrollMore<HTMLDivElement>();
   return (
     <div
       class={`overlay sheet${leaving ? ' is-leaving' : ''}`}
@@ -41,7 +44,10 @@ export function Sheet({
           <h2 class="sheet-title">{title}</h2>
           <span class="sheet-spacer" />
         </header>
-        <div class="sheet-body">{children}</div>
+        <div class={`sheet-body${more ? ' has-more' : ''}`} ref={bodyRef}>
+          {children}
+        </div>
+        <ScrollMore show={more} />
       </div>
     </div>
   );

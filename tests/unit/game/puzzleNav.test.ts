@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPuzzleSession, puzzleById } from '../../../src/core/puzzles';
 import { getMode, modeStatus, startMode } from '../../../src/game/modes';
-import { backAction, showsBoard } from '../../../src/game/nav';
+import { backAction, showsBoard, versusNeedsLeaveConfirm } from '../../../src/game/nav';
 import { coachTarget } from '../../../src/game/puzzleMode';
 
 describe('puzzle / tutorial wiring', () => {
@@ -27,6 +27,14 @@ describe('puzzle / tutorial wiring', () => {
     expect(backAction('puzzlePacks', []).type).toBe('toMenu');
     expect(backAction('puzzleResult', []).type).toBe('toPuzzleLevels');
     expect(backAction('puzzleResult', ['settings']).type).toBe('closeOverlay');
+  });
+
+  it('back closes an open card (charm card, hint) before pausing; overlays still come first', () => {
+    expect(backAction('playing', [], true).type).toBe('closeCard');
+    expect(backAction('shop', [], true).type).toBe('closeCard');
+    expect(backAction('playing', [], false).type).toBe('pause');
+    expect(backAction('playing', ['settings'], true).type).toBe('closeOverlay');
+    expect(backAction('paused', [], true).type).toBe('resume');
   });
 
   it('the board stays visible behind the result panel only', () => {
@@ -57,5 +65,28 @@ describe('puzzle / tutorial wiring', () => {
     expect(coachTarget(geo, move, 1, p8.sim)?.fromRight).toBe(true);
     const p1 = createPuzzleSession(puzzleById('p1-01')!);
     expect(coachTarget(geo, p1.def.solution![0]!, 1, p1.sim)?.fromRight).toBe(false);
+  });
+});
+
+describe('versus leave confirmation', () => {
+  const base = { mode: 'versus', versus: {}, versusHud: {}, versusResult: null };
+  it('asks while a match is in progress (fallback without the mode flag)', () => {
+    expect(versusNeedsLeaveConfirm({ ...base, screen: 'paused' })).toBe(true);
+    expect(versusNeedsLeaveConfirm({ ...base, screen: 'playing' })).toBe(true);
+  });
+  it('follows the published needsLeaveConfirm flag', () => {
+    const hud = { needsLeaveConfirm: false };
+    expect(versusNeedsLeaveConfirm({ ...base, versusHud: hud, screen: 'paused' })).toBe(false);
+  });
+  it('between rounds only an undecided match asks; other modes never', () => {
+    const r = (matchOver: boolean) => ({
+      ...base,
+      screen: 'versusResult' as const,
+      versusResult: { matchOver },
+    });
+    expect(versusNeedsLeaveConfirm(r(false))).toBe(true);
+    expect(versusNeedsLeaveConfirm(r(true))).toBe(false);
+    expect(versusNeedsLeaveConfirm({ ...base, mode: 'endless', screen: 'paused' })).toBe(false);
+    expect(versusNeedsLeaveConfirm({ ...base, screen: 'versusSetup' })).toBe(false);
   });
 });

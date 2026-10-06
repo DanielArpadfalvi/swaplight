@@ -230,6 +230,8 @@ export interface GameUiState {
   runSetup: { deckId: string; brightness: number };
   /** Unlock keys from the save (Brightness levels…). */
   unlocks: string[];
+  /** Run items seen so far (`relic.<id>`, `charm.<id>`, `boss.<id>`; from the save). */
+  collectionSeen: string[];
   /** Run saved in the save file (menu "Continue"). */
   savedRun: SavedRunInfo | null;
   score: number;
@@ -376,6 +378,7 @@ export const INITIAL_UI_STATE: GameUiState = {
   targeting: null,
   runSetup: { deckId: 'neon', brightness: 1 },
   unlocks: [],
+  collectionSeen: [],
   savedRun: null,
   score: 0,
   level: 1,

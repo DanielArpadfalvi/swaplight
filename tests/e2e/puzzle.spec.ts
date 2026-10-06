@@ -102,6 +102,12 @@ test('puzzles: packs → level grid → p1-01 solved with real swaps → stars �
   await shot(page, 'puzzle-hint-text', 400);
   await page.getByTestId('puzzle-hint-ok').click();
   await expect(page.getByTestId('puzzle-hint-card')).toHaveCount(0);
+  // Back with the hint card open closes the card instead of pausing.
+  await page.getByTestId('puzzle-hint').click();
+  await expect(page.getByTestId('puzzle-hint-card')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('puzzle-hint-card')).toHaveCount(0);
+  expect((await page.evaluate(() => window.__swaplight!.getState())).screen).toBe('playing');
 
   // A wrong swap uses the only move → fail screen → undo → solve.
   await page.evaluate(() => window.__swaplight!.puzzle!.swap(11, 0));

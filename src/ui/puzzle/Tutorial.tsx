@@ -4,6 +4,7 @@ import { t, type TranslationKey } from '../../i18n';
 import { IconPlay } from '../icons';
 import { RelicIcon } from '../run/runIcons';
 import { SwapCoach } from './PuzzleScreens';
+import { hudStyle } from '../hudBox';
 
 interface Props {
   state: GameUiState;
@@ -34,12 +35,7 @@ export function TutorialLayer({ state, actions }: Props) {
   const tut = state.tutorial;
   if (!tut) return null;
   const { title, body, extra } = stepText(state);
-  const style = {
-    top: `${state.hudTop}px`,
-    height: `${state.hudHeight}px`,
-    left: `${state.boardLeft}px`,
-    width: `${state.boardWidth}px`,
-  };
+  const style = hudStyle(state);
   const card = tut.kind === 'card';
   return (
     <>

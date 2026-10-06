@@ -70,6 +70,13 @@ export function SettingsScreen({ state, actions, leaving, z }: Props) {
           value={s.highContrast}
           onChange={(v) => set({ highContrast: v })}
         />
+        <ToggleRow
+          id="large-text"
+          label={t('settings.largeText')}
+          hint={t('settings.largeTextHint')}
+          value={s.largeText}
+          onChange={(v) => set({ largeText: v })}
+        />
       </Section>
 
       <Section title={t('settings.sectionLanguage')}>

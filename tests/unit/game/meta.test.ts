@@ -38,6 +38,12 @@ describe('settings', () => {
     expect(sanitizeSettings({ musicVolume: NaN }).musicVolume).toBe(DEFAULT_SETTINGS.musicVolume);
   });
 
+  it('keeps the Larger text choice (off by default, garbage → off)', () => {
+    expect(DEFAULT_SETTINGS.largeText).toBe(false);
+    expect(sanitizeSettings({ largeText: true }).largeText).toBe(true);
+    expect(sanitizeSettings({ largeText: 'yes' }).largeText).toBe(false);
+  });
+
   it('applies everything at boot', () => {
     const t = targets();
     applySettings({ ...DEFAULT_SETTINGS, language: 'auto' }, t);

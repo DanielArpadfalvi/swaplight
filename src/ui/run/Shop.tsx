@@ -7,6 +7,9 @@ import { IconPlay } from '../icons';
 import { CharmIcon, RARITY_COLOR, RelicIcon, SparkIcon } from './runIcons';
 import { SparkPill } from './RunScreens';
 import { charmDesc, charmName, goalText, relicDesc, relicName } from './runText';
+import { longestWord } from '../fit';
+import { ScrollMore } from '../ScrollMore';
+import { useScrollMore } from '../useScrollMore';
 
 interface Props {
   state: GameUiState;
@@ -19,6 +22,7 @@ export function ShopScreen({ state, actions, leaving }: Props) {
   const fmt = useFormat();
   const run = state.run;
   const [selected, setSelected] = useState<number | null>(null);
+  const [bodyRef, more] = useScrollMore<HTMLDivElement>();
   if (!run || !run.shop) return null;
   const shop = run.shop;
   const relicsFull = run.relics.length >= state.runRelicSlots;
@@ -43,7 +47,7 @@ export function ShopScreen({ state, actions, leaving }: Props) {
           </div>
           <SparkPill value={run.szikra} testId="shop-sparks" />
         </header>
-        <div class="sheet-body shop-body">
+        <div class={`sheet-body shop-body${more ? ' has-more' : ''}`} ref={bodyRef}>
           <section class="shop-section">
             <h3 class="section-title">{t('run.relics')}</h3>
             <div class="offer-row offer-row-3" key={`r${deal}`}>
@@ -173,6 +177,7 @@ export function ShopScreen({ state, actions, leaving }: Props) {
           </section>
         </div>
         <footer class="run-foot">
+          <ScrollMore show={more} />
           {nextGoal && next && (
             <div class="next-preview">
               <span class="run-muted">{t('run.upNext')}:</span>{' '}
@@ -248,7 +253,9 @@ function OfferCard({
           <CharmIcon id={offer.id} size={46} />
         )}
       </span>
-      <span class="offer-name">{name}</span>
+      <span class="offer-name" style={{ '--word': String(longestWord(name)) }}>
+        {name}
+      </span>
       <span class="offer-desc">{desc}</span>
       <button
         type="button"

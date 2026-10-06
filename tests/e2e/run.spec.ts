@@ -143,6 +143,13 @@ test('run: deck select → map → intro → play → reward → shop → next s
   await page.getByTestId('stage-start').click();
   await page.evaluate(() => window.__swaplight!.stepTicks(30));
 
+  // Back (Escape) with the charm card open closes the card – it does not pause.
+  await page.getByTestId('hud-charm-0').click();
+  await expect(page.getByTestId('charm-card')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('charm-card')).toBeHidden();
+  expect((await page.evaluate(() => window.__swaplight!.getState())).screen).toBe('playing');
+
   // Untargeted charm: open its card, use it.
   await page.getByTestId('hud-charm-0').click();
   await expect(page.getByTestId('charm-card')).toBeVisible();

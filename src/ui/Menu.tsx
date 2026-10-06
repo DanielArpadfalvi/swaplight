@@ -99,9 +99,9 @@ function ModeCard({
           <span class="mode-name">{t(mode.titleKey)}</span>
           {status === 'soon' && <span class="pill pill-soon">{t('menu.comingSoon')}</span>}
           {status === 'locked' && (
-            <span class="pill pill-lock">
+            <span class="pill pill-lock" title={t('menu.fullVersion')}>
               <IconLock size={11} />
-              {t('menu.fullVersion')}
+              <span class="pill-text">{t('menu.fullVersion')}</span>
             </span>
           )}
         </span>

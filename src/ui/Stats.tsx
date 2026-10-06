@@ -1,4 +1,5 @@
-import { MODES } from '../game/modes';
+import { getMode, MODES } from '../game/modes';
+import { allPackSummaries } from '../game/puzzleProgress';
 import { statTotals } from '../game/progress';
 import type { GameActions, GameUiState } from '../game/state';
 import { t } from '../i18n';
@@ -63,8 +64,9 @@ export function StatsScreen({ state, actions, leaving, z }: Props) {
         ))}
       </div>
       <Section title={t('stats.bestPerMode')}>
-        {MODES.map((mode) => {
+        {MODES.filter((mode) => mode.id !== 'tutorial').map((mode) => {
           const m = state.modeStats[mode.id];
+          if (mode.id === 'puzzles') return <PuzzleStarsRow key={mode.id} state={state} />;
           return (
             <div class={`row row-mode accent-${mode.accent}`} key={mode.id}>
               <span class="row-icon">
@@ -87,5 +89,32 @@ export function StatsScreen({ state, actions, leaving, z }: Props) {
         })}
       </Section>
     </Sheet>
+  );
+}
+
+/** Puzzles have no score: the row shows the stars collected (and puzzles solved). */
+function PuzzleStarsRow({ state }: { state: GameUiState }) {
+  const mode = getMode('puzzles')!;
+  const packs = allPackSummaries(state.puzzleRecords, state.fullVersion);
+  const stars = packs.reduce((n, p) => n + p.stars, 0);
+  const maxStars = packs.reduce((n, p) => n + p.maxStars, 0);
+  const solved = packs.reduce((n, p) => n + p.solved, 0);
+  const total = packs.reduce((n, p) => n + p.total, 0);
+  return (
+    <div class={`row row-mode accent-${mode.accent}`}>
+      <span class="row-icon">
+        <ModeGlyph icon={mode.icon} size={20} />
+      </span>
+      <span class="row-text">
+        <span class="row-label">{t(mode.titleKey)}</span>
+        {solved > 0 && <span class="row-hint">{t('stats.puzzlesSolved', { solved, total })}</span>}
+      </span>
+      <span
+        class={`row-value ${stars > 0 ? 'row-value-best' : 'row-value-none'}`}
+        data-testid="best-puzzles"
+      >
+        {stars > 0 ? t('stats.puzzleStars', { stars, total: maxStars }) : t('stats.none')}
+      </span>
+    </div>
   );
 }

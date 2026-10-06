@@ -15,7 +15,14 @@ import { createDailyMode } from './dailyMode';
 import { feedbackForEvents, musicIntensity, type Feedback } from './feedback';
 import { GameLoop } from './loop';
 import { startMode, type ModeHost } from './modes';
-import { backAction, popOverlay, pushOverlay, showsBoard, type Overlay } from './nav';
+import {
+  backAction,
+  popOverlay,
+  pushOverlay,
+  showsBoard,
+  versusNeedsLeaveConfirm,
+  type Overlay,
+} from './nav';
 import { recordGame } from './progress';
 import { createPuzzleMode } from './puzzleMode';
 import { createTutorialMode } from './tutorialMode';
@@ -77,6 +84,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     best: save.data.modes.endless?.best ?? 0,
     language: getLanguage(),
     unlocks: [...save.data.unlocks],
+    collectionSeen: save.data.collectionSeen,
     versusRecords: { ...save.data.versus },
     canShare: platform.clipboard.available,
     puzzleRecords: save.data.puzzles,
@@ -88,6 +96,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       modeStats: data.modes,
       fullVersion: data.fullVersion,
       unlocks: data.unlocks,
+      collectionSeen: data.collectionSeen,
       versusRecords: data.versus,
       dailySave: { records: data.daily, streak: data.dailyStreak },
       puzzleRecords: data.puzzles,
@@ -121,11 +130,20 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
 
   let toastKey = 0;
   let toastTimer: number | undefined;
+  /** Screen the current toast belongs to: a screen change clears it (it never covers the next one). */
+  let toastScreen: GameUiState['screen'] | null = null;
   const showToast = (text: string, ms = TOAST_MS): void => {
+    toastScreen = store.get().screen;
     store.set({ toast: { text, ms, key: ++toastKey } });
     window.clearTimeout(toastTimer);
     toastTimer = window.setTimeout(() => store.set({ toast: null }), ms);
   };
+  store.subscribe((state) => {
+    if (state.toast && state.screen !== toastScreen) {
+      window.clearTimeout(toastTimer);
+      store.set({ toast: null });
+    }
+  });
 
   const flushSave = (): Promise<void> => save.flush();
   window.addEventListener('pagehide', () => {
@@ -178,8 +196,11 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         ...(layoutMode === 'run' || layoutMode === 'daily'
           ? { hudFraction: 0.235, minHud: 176, maxHud: 214 }
           : {}),
-        // Puzzle / tutorial boards never rise: no preview strip.
-        ...(layoutMode === 'static' ? { previewCells: 0 } : {}),
+        // Puzzle / tutorial boards never rise: no preview strip. Their HUD (title + pause row,
+        // goal card + moves / coach card) needs a taller band than Endless.
+        ...(layoutMode === 'static'
+          ? { previewCells: 0, hudFraction: 0.25, minHud: 164, maxHud: 214 }
+          : {}),
       });
       store.set({ versusLayout: null });
     }
@@ -496,7 +517,11 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   window.setInterval(() => dailyMode.syncToday(), 30_000);
 
   const puzzleMode = createPuzzleMode(boardModeHost);
-  const tutorialMode = createTutorialMode({ ...boardModeHost, toMenu: () => toMenu() });
+  const tutorialMode = createTutorialMode({
+    ...boardModeHost,
+    toMenu: () => toMenu(),
+    startRun: () => runMode.open(),
+  });
 
   /**
    * Leave the mode that owns the board before another flow takes over: Run is kept saved, Versus /
@@ -533,12 +558,19 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   };
 
   const handleBack = (): void => {
-    const { screen, overlays } = store.get();
-    const action = backAction(screen, overlays);
+    const { screen, overlays, mode, charmMenu, targeting, puzzle } = store.get();
+    const charmOpen = mode === 'run' && (charmMenu !== null || targeting !== null);
+    const hintOpen = mode === 'puzzle' && puzzle.hintCard !== null;
+    const cardOpen = charmOpen || hintOpen;
+    const action = backAction(screen, overlays, cardOpen);
     switch (action.type) {
       case 'closeOverlay':
         audio.uiTap();
         setOverlays(popOverlay(overlays));
+        break;
+      case 'closeCard':
+        if (charmOpen) runMode.actions.cancelCharm();
+        else puzzleMode.actions.closeHint();
         break;
       case 'pause':
         actions.pause();
@@ -547,7 +579,13 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         actions.resume();
         break;
       case 'toMenu':
-        actions.menu();
+        // Leaving an undecided Versus match forfeits it: confirm first.
+        if (versusNeedsLeaveConfirm(store.get())) {
+          audio.uiTap();
+          setOverlays(pushOverlay(overlays, 'leaveConfirm'));
+        } else {
+          actions.menu();
+        }
         break;
       case 'toRunMap':
         runMode.backToMap();

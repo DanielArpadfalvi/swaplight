@@ -34,6 +34,8 @@ const CARD_BOARD = rows('..P...', '.CBY..', 'RGPCB.', 'YRBGYC');
 export interface TutorialModeHost extends PuzzleModeHost {
   /** Back to the main menu (after finishing / quitting). */
   toMenu(): void;
+  /** Open the Run mode (the final card's "Let's play!" leads straight into a run). */
+  startRun(): void;
 }
 
 /** Test hooks of the tutorial (`window.__swaplight.tutorial`). */
@@ -143,7 +145,8 @@ export function createTutorialMode(host: TutorialModeHost): TutorialMode {
     else if (!host.isFrozen()) loop.resume();
   };
 
-  const complete = (): void => {
+  /** Finish the tutorial: back to the menu, or (from the final card's button) into the Run mode. */
+  const complete = (toRun = false): void => {
     clearTimer();
     ps = null;
     if (!save.data.tutorialDone) {
@@ -153,12 +156,13 @@ export function createTutorialMode(host: TutorialModeHost): TutorialMode {
       void save.flush();
     }
     store.set({ tutorialDone: true, tutorial: null });
-    host.showToast(t('tutorial.complete'));
     host.toMenu();
+    if (toRun) host.startRun();
+    host.showToast(t('tutorial.complete'));
   };
 
-  const advance = (): void => {
-    if (index + 1 >= TUTORIAL_STEPS.length) complete();
+  const advance = (toRun = false): void => {
+    if (index + 1 >= TUTORIAL_STEPS.length) complete(toRun);
     else begin(index + 1);
   };
 
@@ -218,7 +222,7 @@ export function createTutorialMode(host: TutorialModeHost): TutorialMode {
     },
     next() {
       audio.uiConfirm();
-      advance();
+      advance(true);
     },
   };
 
