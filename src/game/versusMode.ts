@@ -384,8 +384,20 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
   };
 
   /** A Full-Version-only CPU level was picked: offer the unlock. */
-  const lockedLevel = (): void => {
+  /** A locked level the player tapped: selected once the Full Version arrives (bought in the sheet). */
+  let wantedLevel: CpuLevel | null = null;
+  store.subscribe((s) => {
+    if (wantedLevel === null || !s.fullVersion) return;
+    const level = wantedLevel;
+    wantedLevel = null;
+    if (s.screen === 'versusSetup' && s.versusSetup.level !== level) {
+      store.set({ versusSetup: { ...s.versusSetup, level } });
+    }
+  });
+
+  const lockedLevel = (level: CpuLevel): void => {
     if (host.openPaywall) {
+      wantedLevel = level;
       host.openPaywall('versus');
       return;
     }
@@ -398,9 +410,10 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
       audio.uiTap();
       if (!isCpuLevel(level)) return;
       if (!versusLevelAvailable(level, store.get().fullVersion)) {
-        lockedLevel();
+        lockedLevel(level);
         return;
       }
+      wantedLevel = null;
       haptics.selection();
       store.set({ versusSetup: { ...store.get().versusSetup, level } });
     },
@@ -413,7 +426,7 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
       void audio.unlock();
       const { level, format } = store.get().versusSetup;
       if (!versusLevelAvailable(level, store.get().fullVersion)) {
-        lockedLevel();
+        lockedLevel(level);
         return;
       }
       startMatch(host.randomSeed(), level, format);

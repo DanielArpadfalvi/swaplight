@@ -4,6 +4,7 @@ import {
   FlashOverlay,
   ParticleBurstPool,
   ScreenShake,
+  fitPopup,
   shakeOffset,
 } from '../../../src/render/style/effects';
 import { blockGlowPadding, blockTextureKey } from '../../../src/render/style/blockTextures';
@@ -102,5 +103,25 @@ describe('block texture helpers', () => {
   it('pads glows proportionally to tile size', () => {
     expect(blockGlowPadding(48)).toBeGreaterThan(12);
     expect(blockGlowPadding(96)).toBeGreaterThan(blockGlowPadding(48));
+  });
+});
+
+describe('fitPopup', () => {
+  it('keeps a short label where it is', () => {
+    expect(fitPopup(150, 100, 0.5, 0, 300)).toEqual({ x: 150, scale: 0.5 });
+  });
+
+  it('clamps the center so the label edges stay inside the bounds', () => {
+    // 200 px drawn width near the left edge of a 0..300 board.
+    expect(fitPopup(20, 400, 0.5, 0, 300)).toEqual({ x: 100, scale: 0.5 });
+    expect(fitPopup(290, 400, 0.5, 0, 300)).toEqual({ x: 200, scale: 0.5 });
+  });
+
+  it('shrinks a label wider than the board (long Hungarian combo text)', () => {
+    const r = fitPopup(40, 900, 0.5, 10, 310);
+    expect(r.scale).toBeCloseTo(300 / 900);
+    expect(r.x).toBeCloseTo(160);
+    expect(r.x - (900 * r.scale) / 2).toBeGreaterThanOrEqual(10 - 1e-9);
+    expect(r.x + (900 * r.scale) / 2).toBeLessThanOrEqual(310 + 1e-9);
   });
 });

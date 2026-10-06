@@ -219,3 +219,16 @@ test('locked Daily / Versus Hard → paywall → buy → both playable', async (
   await expect(page.getByTestId('paywall')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test('locked Daily card → buy → "Let\'s play" opens the Daily intro', async ({ page }) => {
+  const errors = trackErrors(page);
+  await boot(page);
+  await page.getByTestId('mode-daily').click();
+  await expect(page.getByTestId('paywall')).toBeVisible();
+  await page.getByTestId('paywall-buy').click();
+  await expect(page.getByTestId('paywall-success')).toBeVisible();
+  await page.getByTestId('paywall-done').click();
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
+  await expect(page.getByTestId('daily-intro')).toBeVisible();
+  expect(errors).toEqual([]);
+});

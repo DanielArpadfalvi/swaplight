@@ -48,6 +48,6 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 - [x] T8.1 Purchases interface + mock + RevenueCat impl, entitlement gating, paywall, restore
 
 ## M9 – Release prep
-- [ ] T9.1 Store listing EN/HU, generated screenshots, privacy policy, age-rating answers
+- [x] T9.1 Store listing EN/HU, generated screenshots, privacy policy, age-rating answers
 - [ ] T9.2 Signed release pipeline + fastlane, `docs/RELEASE.md`
-- [ ] T9.3 Balance + full QA pass
+- [x] T9.3 Balance + full QA pass

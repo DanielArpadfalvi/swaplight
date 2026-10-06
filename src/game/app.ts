@@ -646,6 +646,27 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     }
   };
 
+  /**
+   * A Full-Version mode card tapped while locked. When that paywall closes (close button, "Let's
+   * play" or back) with the Full Version owned and the menu still showing, the mode starts.
+   */
+  let lockedModeTapped: ModeId | null = null;
+  let paywallShown = false;
+  store.subscribe((s) => {
+    const shown = s.overlays.includes('paywall');
+    if (shown === paywallShown) return;
+    paywallShown = shown;
+    if (shown) return;
+    const id = lockedModeTapped;
+    lockedModeTapped = null;
+    if (!id || !s.fullVersion) return;
+    queueMicrotask(() => {
+      const now = store.get();
+      if (now.screen !== 'menu' || now.overlays.length > 0) return;
+      if (startMode(id, modeHost, true) === 'playable') audio.uiConfirm();
+    });
+  });
+
   const actions: GameActions = {
     play() {
       void audio.unlock();
@@ -660,8 +681,10 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       } else {
         audio.uiTap();
         platform.haptics.notify('warning');
-        if (status === 'locked') paywall.open(PAYWALL_REASON_BY_MODE[id] ?? 'menu');
-        else if (status === 'soon') showToast(t('menu.soonHint'));
+        if (status === 'locked') {
+          lockedModeTapped = id;
+          paywall.open(PAYWALL_REASON_BY_MODE[id] ?? 'menu');
+        } else if (status === 'soon') showToast(t('menu.soonHint'));
       }
     },
     pause() {

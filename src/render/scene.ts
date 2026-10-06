@@ -4,6 +4,7 @@ import { riseFraction } from '../core/sim';
 import { BoardView, type BoardRenderHints } from './board/BoardView';
 import { cellCenter, type GameLayout } from './board/layout';
 import { NeonBackground } from './style/background';
+import { attachDeferredDestroy } from './style/blockTextures';
 import { AttackBoltPool, type BoltOptions } from './style/bolts';
 import { mixColor } from './style/colorMath';
 import { FlashOverlay, FloatingTextPool, ParticleBurstPool, ScreenShake } from './style/effects';
@@ -35,6 +36,7 @@ export class GameScene {
 
   private constructor(app: Application) {
     this.app = app;
+    attachDeferredDestroy(app.renderer);
     const { width, height } = app.screen;
     this.bg = new NeonBackground({ width, height, seed: 3, horizon: 0.62 });
     this.board = new BoardView(app.renderer, this.palette);
@@ -135,10 +137,13 @@ export class GameScene {
             ? ui.success
             : mixColor(ui.gold, 0xffffff, 0.1);
     const k = layout.cellSize / 50;
+    const inset = layout.cellSize * 0.12;
     this.popups.spawn(text, x, p.y, color, {
       scale: scale * k,
       life: tone === 'score' ? 0.95 : 1.25,
       rise: layout.cellSize * (tone === 'score' ? 0.9 : 1.2),
+      minX: layout.originX + inset,
+      maxX: layout.originX + layout.boardWidth - inset,
     });
   }
 

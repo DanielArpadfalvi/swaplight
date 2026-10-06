@@ -15,7 +15,7 @@ Utolsó frissítés: 2026-10-06. Ez a fájl ahhoz kell, hogy a fejlesztést egy 
 | M6 Meta & UI (menü, beállítások, mentés, statisztika, gyűjtemény, EN/HU) | ✅ |
 | M7 Mobil héj (Capacitor Android/iOS, ikon, splash, CI natív build) | ✅ |
 | M8 Monetizáció (RevenueCat, „Teljes verzió” paywall) | ✅ |
-| M9 Kiadás-előkészítés | 🟡 T9.1 ✅ (store-szövegek, weboldal, screenshot-generátor) · T9.2 pipeline kész, élesben még nem futott (secretek hiányoznak) · **T9.3 utolsó QA-kör folyamatban** |
+| M9 Kiadás-előkészítés | 🟡 T9.1 ✅ (store-szövegek, weboldal, screenshot-generátor) · T9.2 pipeline kész, élesben még nem futott (secretek hiányoznak) · T9.3 ✅ (utolsó QA-kör kész) |
 
 Részletes feladatlista: `docs/TASKS.md`. Terv: `docs/PLAN.md`. Kiadási útmutató: `docs/RELEASE.md`.
 

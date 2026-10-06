@@ -13,6 +13,7 @@ import {
   ModeGlyph,
 } from './icons';
 import { PaywallEmblem } from './Paywall';
+import { useFitWord } from './fit';
 import { useFormat } from './format';
 import { DailyCardInfo } from './modes/DailyScreens';
 
@@ -232,10 +233,13 @@ function BarButton({
   onClick: () => void;
   children: ComponentChildren;
 }) {
+  const fit = useFitWord<HTMLSpanElement>(0.75);
   return (
     <button type="button" class="bar-btn" data-testid={testId} onClick={onClick}>
       {children}
-      <span class="bar-label">{label}</span>
+      <span class="bar-label" ref={fit}>
+        {label}
+      </span>
     </button>
   );
 }

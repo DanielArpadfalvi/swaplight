@@ -251,6 +251,8 @@ export interface DailyHistoryDay {
   date: string;
   /** Official score, or null when the official attempt was not played that day. */
   score: number | null;
+  /** Best practice score that day (0 when none). */
+  practice: number;
 }
 
 /** The last `DAILY_HISTORY_DAYS` days, oldest first, ending with `today`. */
@@ -259,7 +261,7 @@ export function dailyHistory(save: SaveData, today: string): DailyHistoryDay[] {
   for (let i = DAILY_HISTORY_DAYS - 1; i >= 0; i--) {
     const date = addDays(today, -i);
     const r = save.daily[date];
-    out.push({ date, score: r?.official ? r.score : null });
+    out.push({ date, score: r?.official ? r.score : null, practice: r?.practiceBest ?? 0 });
   }
   return out;
 }
