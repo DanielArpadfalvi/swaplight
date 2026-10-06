@@ -41,20 +41,21 @@ test('menu → settings persist across reload → endless → pause → quit to 
   const errors = trackErrors(page);
   await boot(page);
 
-  // Main menu: every mode is listed, only Endless is playable, Daily carries the lock badge.
+  // Main menu: every mode is listed and implemented; Daily (Full Version) carries the lock badge.
   await expect(page.getByTestId('start-screen')).toBeVisible();
   for (const id of ['run', 'endless', 'versus', 'daily', 'puzzles', 'tutorial']) {
     await expect(page.getByTestId(`mode-${id}`)).toBeVisible();
   }
-  await expect(page.getByTestId('mode-endless')).toHaveClass(/mode-playable/);
-  await expect(page.getByTestId('mode-run')).toHaveClass(/mode-playable/);
-  await expect(page.getByTestId('mode-tutorial')).toHaveClass(/mode-soon/);
+  for (const id of ['run', 'endless', 'versus', 'puzzles', 'tutorial']) {
+    await expect(page.getByTestId(`mode-${id}`)).toHaveClass(/mode-playable/);
+  }
+  await expect(page.locator('.mode-soon')).toHaveCount(0);
   await expect(page.getByTestId('mode-daily').getByTestId('lock-badge')).toBeVisible();
   expect((await page.evaluate(() => window.__swaplight!.getRenderInfo())).boardVisible).toBe(false);
   await shot(page, 'menu');
 
-  // A coming-soon mode explains itself instead of starting.
-  await page.getByTestId('mode-tutorial').click();
+  // A locked mode explains itself instead of starting.
+  await page.getByTestId('mode-daily').click();
   await expect(page.getByTestId('toast')).toBeVisible();
   expect((await state(page)).screen).toBe('menu');
 

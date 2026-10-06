@@ -1,8 +1,10 @@
 import type { SimState } from '../core/types';
 import type { Overlay, Screen } from './nav';
 import type { DailyTestApi } from './dailyMode';
+import type { PuzzleTestApi } from './puzzleMode';
 import type { RunTestApi } from './runMode';
 import type { PlayMode } from './state';
+import type { TutorialTestApi } from './tutorialMode';
 import type { VersusTestApi } from './versusMode';
 import type { SaveData } from './save';
 
@@ -47,6 +49,10 @@ export interface SwaplightTestApi {
   daily?: DailyTestApi;
   /** Grant / revoke the Full Version entitlement (mock store). */
   setFullVersion?(on: boolean): void;
+  /** Puzzle-mode hooks (open by id, swap, solve with the stored solution). */
+  puzzle?: PuzzleTestApi;
+  /** Tutorial hooks (step control, scripted moves). */
+  tutorial?: TutorialTestApi;
 }
 
 export interface SwaplightStateSummary {

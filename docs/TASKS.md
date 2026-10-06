@@ -31,8 +31,8 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 ## M5 – More modes
 - [ ] T5.1 Garbage blocks + Versus CPU (AI, 5 difficulties)
 - [ ] T5.2 Daily challenge (date seed + modifier)
-- [ ] T5.3 Puzzle mode + solver/validator + 4 packs × 30
-- [ ] T5.4 Interactive tutorial
+- [x] T5.3 Puzzle mode + solver/validator + 4 packs × 30
+- [x] T5.4 Interactive tutorial
 
 ## M6 – Meta & UI
 - [x] T6.1 Main menu, mode select, settings, pause
@@ -42,7 +42,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 ## M7 – Mobile shell
 - [x] T7.1 Capacitor setup (android/ios), app id, safe areas, lifecycle pause/resume, status bar
 - [x] T7.2 Icon + splash generated from code
-- [ ] T7.3 CI workflows: Android AAB/APK, iOS build on macOS runner
+- [x] T7.3 CI workflows: Android AAB/APK, iOS build on macOS runner
 
 ## M8 – Monetization
 - [ ] T8.1 Purchases interface + mock + RevenueCat impl, entitlement gating, paywall, restore

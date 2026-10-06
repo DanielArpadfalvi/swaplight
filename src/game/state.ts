@@ -7,8 +7,15 @@ import type { Language } from '../i18n';
 import type { ModeId } from './modes';
 import type { CharmTargetKind, FinishedStage, RunResumePoint } from './runController';
 import type { Overlay, Screen } from './nav';
-import type { DailyResult, DailyStreak, ModeStats, VersusRecord } from './save';
+import type { DailyResult, DailyStreak, ModeStats, PuzzleRecord, VersusRecord } from './save';
 import type { GarbageIcon, VersusFormat } from './versus';
+import {
+  INITIAL_PUZZLE_UI,
+  type PuzzleActions,
+  type PuzzleUiState,
+  type TutorialActions,
+  type TutorialUiState,
+} from './puzzleState';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 
 export type { Overlay, Screen } from './nav';
@@ -94,7 +101,7 @@ export interface SavedRunInfo {
 }
 
 /** Mode that owns the playing / paused screens. */
-export type PlayMode = 'endless' | 'run' | 'versus' | 'daily';
+export type PlayMode = 'endless' | 'run' | 'versus' | 'daily' | 'puzzle' | 'tutorial';
 
 /** A screen-space rectangle in CSS px. */
 export interface UiRect {
@@ -196,6 +203,14 @@ export interface GameUiState {
   dailyToday: string;
   /** Clipboard available (share buttons). */
   canShare: boolean;
+  /** Puzzle mode screens (pack select, level grid, play, result). */
+  puzzle: PuzzleUiState;
+  /** Solved puzzles (from the save). */
+  puzzleRecords: Record<string, PuzzleRecord>;
+  /** Interactive tutorial in progress. */
+  tutorial: TutorialUiState | null;
+  /** The tutorial was completed (or skipped through); hides the menu banner. */
+  tutorialDone: boolean;
   /** Current run (plain data, replaced on every change). */
   run: RunState | null;
   runHud: RunHudState | null;
@@ -271,6 +286,8 @@ export interface GameActions {
   run: RunActions;
   versus: VersusActions;
   daily: DailyActions;
+  puzzle: PuzzleActions;
+  tutorial: TutorialActions;
 }
 
 /** Versus-mode UI actions (see `versusMode.ts`). */
@@ -343,6 +360,10 @@ export const INITIAL_UI_STATE: GameUiState = {
   dailySave: { records: {}, streak: { current: 0, best: 0, last: '' } },
   dailyToday: '1970-01-01',
   canShare: false,
+  puzzle: INITIAL_PUZZLE_UI,
+  puzzleRecords: {},
+  tutorial: null,
+  tutorialDone: false,
   run: null,
   runHud: null,
   runRerollCost: 0,

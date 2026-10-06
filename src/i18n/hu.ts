@@ -1,6 +1,7 @@
 import type { Dictionary } from './dictionary';
 import { runContentHu } from './runContent.hu';
 import { versusDailyHu } from './versusDaily.hu';
+import { modeContentHu } from './modeContent.hu';
 
 /**
  * Hungarian dictionary. A számnév után a főnév egyes számban áll
@@ -297,4 +298,5 @@ export const hu: Dictionary = {
   },
   ...runContentHu,
   ...versusDailyHu,
+  ...modeContentHu,
 };

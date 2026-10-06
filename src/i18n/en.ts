@@ -1,5 +1,6 @@
 import { runContentEn } from './runContent.en';
 import { versusDailyEn } from './versusDaily.en';
+import { modeContentEn } from './modeContent.en';
 
 /**
  * English source dictionary. Every other language must match its shape
@@ -296,4 +297,5 @@ export const en = {
   },
   ...runContentEn,
   ...versusDailyEn,
+  ...modeContentEn,
 };

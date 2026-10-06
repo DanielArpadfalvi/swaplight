@@ -106,8 +106,10 @@ describe('mode registry', () => {
     }
   });
 
-  it('Endless, Run and Versus are playable for free; unimplemented modes are "soon"', () => {
+  it('all six modes are implemented; unimplemented (stub) modes are "soon"', () => {
     expect(modeStatus(getMode('endless')!, false)).toBe('playable');
+    expect(modeStatus(getMode('puzzles')!, false)).toBe('playable');
+    expect(modeStatus(getMode('tutorial')!, false)).toBe('playable');
     expect(modeStatus(getMode('run')!, false)).toBe('playable');
     expect(modeStatus(getMode('versus')!, false)).toBe('playable');
     expect(modeStatus(getMode('daily')!, false)).toBe('locked');
@@ -120,7 +122,14 @@ describe('mode registry', () => {
     const daily: ModeDef = { ...getMode('daily')!, start: vi.fn() };
     expect(modeStatus(daily, false)).toBe('locked');
     expect(modeStatus(daily, true)).toBe('playable');
-    const host = { startEndless: vi.fn(), startRun: vi.fn() };
+    const host = {
+      startEndless: vi.fn(),
+      startRun: vi.fn(),
+      startVersus: vi.fn(),
+      startDaily: vi.fn(),
+      startPuzzles: vi.fn(),
+      startTutorial: vi.fn(),
+    };
     expect(startMode('daily', host, false, [daily])).toBe('locked');
     expect(daily.start).not.toHaveBeenCalled();
     expect(startMode('daily', host, true, [daily])).toBe('playable');
@@ -133,6 +142,8 @@ describe('mode registry', () => {
       startRun: vi.fn(),
       startVersus: vi.fn(),
       startDaily: vi.fn(),
+      startPuzzles: vi.fn(),
+      startTutorial: vi.fn(),
     };
     const unbuilt: ModeDef = { ...getMode('daily')!, start: undefined };
     expect(startMode('daily', host, true, [unbuilt])).toBe('soon');
@@ -142,6 +153,10 @@ describe('mode registry', () => {
     expect(startMode('daily', host, false)).toBe('locked');
     expect(startMode('daily', host, true)).toBe('playable');
     expect(host.startDaily).toHaveBeenCalledTimes(1);
+    expect(startMode('puzzles', host, false)).toBe('playable');
+    expect(host.startPuzzles).toHaveBeenCalledTimes(1);
+    expect(startMode('tutorial', host, false)).toBe('playable');
+    expect(host.startTutorial).toHaveBeenCalledTimes(1);
     expect(startMode('run', host, false)).toBe('playable');
     expect(host.startRun).toHaveBeenCalledTimes(1);
     expect(startMode('endless', host, false)).toBe('playable');

@@ -16,7 +16,7 @@ import { DEFAULT_SETTINGS, sanitizeSettings, type Settings } from './settings';
 export const SAVE_KEY = 'save';
 /** Where an unreadable save is parked (for support / manual recovery) before starting fresh. */
 export const SAVE_BACKUP_KEY = 'save.corrupt';
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 /** Pre-save-system key of the Endless best score (M2), imported once into a fresh save. */
 export const LEGACY_ENDLESS_BEST_KEY = 'endless.best';
 /** Language override key (still written by `src/i18n`), imported once into a fresh save. */
@@ -64,6 +64,14 @@ export interface VersusRecord {
   garbageSent: number;
 }
 
+/** Best result of one solved puzzle (keyed by puzzle id in {@link SaveData.puzzles}). */
+export interface PuzzleRecord {
+  /** Best star rating 1..3. */
+  stars: number;
+  /** Fewest swaps used in a solve. */
+  moves: number;
+}
+
 export interface SaveData {
   version: number;
   settings: Settings;
@@ -85,6 +93,8 @@ export interface SaveData {
   versus: Record<string, VersusRecord>;
   /** Serialized in-progress Run (owned by the Run mode; opaque here). */
   runInProgress: JsonValue;
+  /** Solved puzzles, keyed by puzzle id (`p1-01`…). Added in save version 2. */
+  puzzles: Record<string, PuzzleRecord>;
 }
 
 export const EMPTY_MODE_STATS: Readonly<ModeStats> = {
@@ -110,6 +120,7 @@ export function createDefaultSave(): SaveData {
     dailyStreak: { current: 0, best: 0, last: '' },
     versus: {},
     runInProgress: null,
+    puzzles: {},
   };
 }
 
@@ -126,6 +137,8 @@ export type SaveMigration = (data: RawSave) => RawSave;
  */
 export const SAVE_MIGRATIONS: Readonly<Record<number, SaveMigration>> = {
   0: (data) => ({ ...data }),
+  // v2: puzzle progress.
+  1: (data) => ({ ...data, puzzles: isRecord(data.puzzles) ? data.puzzles : {} }),
 };
 
 export class SaveError extends Error {}
@@ -194,6 +207,18 @@ export function sanitizeModeStats(v: unknown): ModeStats {
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
 
+export function sanitizePuzzleRecords(v: unknown): Record<string, PuzzleRecord> {
+  const out: Record<string, PuzzleRecord> = {};
+  if (!isRecord(v)) return out;
+  for (const [id, r] of Object.entries(v)) {
+    if (!isRecord(r)) continue;
+    const stars = Math.min(3, count(r.stars));
+    if (stars < 1) continue;
+    out[id] = { stars, moves: count(r.moves) };
+  }
+  return out;
+}
+
 /** Coerce migrated data into a valid {@link SaveData}; invalid fields fall back to defaults. */
 export function sanitizeSave(raw: RawSave): SaveData {
   const base = createDefaultSave();
@@ -246,6 +271,7 @@ export function sanitizeSave(raw: RawSave): SaveData {
     dailyStreak,
     versus,
     runInProgress: isJson(raw.runInProgress) ? raw.runInProgress : base.runInProgress,
+    puzzles: sanitizePuzzleRecords(raw.puzzles),
   };
 }
 

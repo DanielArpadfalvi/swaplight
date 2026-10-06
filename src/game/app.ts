@@ -17,6 +17,8 @@ import { GameLoop } from './loop';
 import { startMode, type ModeHost } from './modes';
 import { backAction, popOverlay, pushOverlay, showsBoard, type Overlay } from './nav';
 import { recordGame } from './progress';
+import { createPuzzleMode } from './puzzleMode';
+import { createTutorialMode } from './tutorialMode';
 import { createRunMode } from './runMode';
 import { SaveManager } from './save';
 import { EndlessSession } from './session';
@@ -26,8 +28,8 @@ import { createStore, type Store } from './store';
 import type { SwaplightTestApi } from './testApi';
 import { createVersusMode } from './versusMode';
 
-/** Board layout flavour (HUD height, versus split). */
-type LayoutMode = PlayMode;
+/** Board layout flavour (HUD height, versus split; 'static' = no preview strip). */
+type LayoutMode = Exclude<PlayMode, 'puzzle' | 'tutorial'> | 'static';
 
 /** Delay between the top-out and the game over panel (lets the flash/shake play). */
 const GAME_OVER_PANEL_DELAY_MS = 750;
@@ -77,6 +79,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     unlocks: [...save.data.unlocks],
     versusRecords: { ...save.data.versus },
     canShare: platform.clipboard.available,
+    puzzleRecords: save.data.puzzles,
+    tutorialDone: save.data.tutorialDone,
   });
   save.subscribe((data) =>
     store.set({
@@ -86,6 +90,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       unlocks: data.unlocks,
       versusRecords: data.versus,
       dailySave: { records: data.daily, streak: data.dailyStreak },
+      puzzleRecords: data.puzzles,
+      tutorialDone: data.tutorialDone,
     }),
   );
 
@@ -172,6 +178,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         ...(layoutMode === 'run' || layoutMode === 'daily'
           ? { hudFraction: 0.235, minHud: 176, maxHud: 214 }
           : {}),
+        // Puzzle / tutorial boards never rise: no preview strip.
+        ...(layoutMode === 'static' ? { previewCells: 0 } : {}),
       });
       store.set({ versusLayout: null });
     }
@@ -301,6 +309,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     if (mode === 'run') runMode.afterTick(events);
     else if (mode === 'versus') versusMode.afterTick();
     else if (mode === 'daily') dailyMode.afterTick();
+    else if (mode === 'puzzle') puzzleMode.afterTick(events);
+    else if (mode === 'tutorial') tutorialMode.afterTick(events);
     else if (sim.gameOver) enterGameOver();
   };
 
@@ -326,14 +336,6 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     },
   });
   scene.app.ticker.add((ticker) => loop.frame(ticker.deltaMS));
-
-  /** Leave the mode that owns the board (Run is kept saved, Versus / Daily are closed). */
-  const leaveCurrentMode = (): void => {
-    const mode = store.get().mode;
-    if (mode === 'run') runMode.suspend();
-    else if (mode === 'versus') versusMode.leave();
-    else if (mode === 'daily') dailyMode.leave();
-  };
 
   const startGame = (): void => {
     window.clearTimeout(gameOverTimer);
@@ -394,6 +396,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     const screen = store.get().screen;
     const mode = store.get().mode;
     if (mode !== 'endless') {
+      // Run is kept saved; Versus / Daily / Puzzle / Tutorial are closed (nothing to record here).
       leaveCurrentMode();
     } else if ((screen === 'playing' || screen === 'paused') && !sim.gameOver) {
       if (sim.tick >= MIN_RECORDED_TICKS) recordCurrentGame();
@@ -453,7 +456,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     toMenu: () => toMenu(),
   });
 
-  const versusMode = createVersusMode({
+  /** Services shared by the board modes (Puzzle, Tutorial, Versus, Daily). */
+  const boardModeHost = {
     store,
     save,
     audio,
@@ -462,9 +466,9 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     session,
     loop,
     isFrozen: () => frozen,
-    showToast: (text) => showToast(text),
+    showToast: (text: string) => showToast(text),
     setLayoutMode,
-    versusLayout: () => versusLayout,
+    geometry,
     resetBoard() {
       scene.board.resetTracking();
       scene.board.captureTick(session.sim);
@@ -474,35 +478,38 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       publish(session.sim);
       store.set({ scoreFlash: null, raiseHeld: false });
     },
+  };
+
+  const versusMode = createVersusMode({
+    ...boardModeHost,
+    versusLayout: () => versusLayout,
     randomSeed: nextSeed,
     toMenu: () => toMenu(),
   });
 
   const dailyMode = createDailyMode({
-    store,
-    save,
-    audio,
-    haptics: platform.haptics,
-    scene,
-    session,
-    loop,
+    ...boardModeHost,
     clipboard: platform.clipboard,
-    isFrozen: () => frozen,
-    showToast: (text) => showToast(text),
-    setLayoutMode,
-    resetBoard() {
-      scene.board.resetTracking();
-      scene.board.captureTick(session.sim);
-      scene.clearEffects();
-      loop.reset();
-      lastIntensity = -1;
-      publish(session.sim);
-      store.set({ scoreFlash: null, raiseHeld: false });
-    },
     toMenu: () => toMenu(),
   });
   // The menu's daily countdown rolls over at midnight.
   window.setInterval(() => dailyMode.syncToday(), 30_000);
+
+  const puzzleMode = createPuzzleMode(boardModeHost);
+  const tutorialMode = createTutorialMode({ ...boardModeHost, toMenu: () => toMenu() });
+
+  /**
+   * Leave the mode that owns the board before another flow takes over: Run is kept saved, Versus /
+   * Daily / Puzzle / Tutorial are closed. Endless has nothing to clean up.
+   */
+  function leaveCurrentMode(): void {
+    const mode = store.get().mode;
+    if (mode === 'run') runMode.suspend();
+    else if (mode === 'versus') versusMode.leave();
+    else if (mode === 'daily') dailyMode.leave();
+    else if (mode === 'puzzle') puzzleMode.leave();
+    else if (mode === 'tutorial') tutorialMode.leave();
+  }
 
   const modeHost: ModeHost = {
     startEndless: () => startGame(),
@@ -514,6 +521,14 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     startDaily: () => {
       leaveCurrentMode();
       dailyMode.open();
+    },
+    startPuzzles: () => {
+      leaveCurrentMode();
+      puzzleMode.open();
+    },
+    startTutorial: () => {
+      leaveCurrentMode();
+      tutorialMode.open();
     },
   };
 
@@ -536,6 +551,12 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         break;
       case 'toRunMap':
         runMode.backToMap();
+        break;
+      case 'toPuzzlePacks':
+        puzzleMode.actions.toPacks();
+        break;
+      case 'toPuzzleLevels':
+        puzzleMode.backFromResult();
         break;
       case 'confirmExit':
         audio.uiTap();
@@ -620,6 +641,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     run: runMode.actions,
     versus: versusMode.actions,
     daily: dailyMode.actions,
+    puzzle: puzzleMode.actions,
+    tutorial: tutorialMode.actions,
   };
 
   bindPointerInput(scene.canvas, session.gesture, () => {
@@ -720,6 +743,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     api.versus = versusMode.testApi;
     api.daily = dailyMode.testApi;
     api.setFullVersion = (on: boolean) => setFullVersion(on);
+    api.puzzle = puzzleMode.testApi;
+    api.tutorial = tutorialMode.testApi;
     window.__swaplight = api;
   }
 }
