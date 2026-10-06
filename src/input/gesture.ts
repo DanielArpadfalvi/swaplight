@@ -9,11 +9,20 @@ import type { SimView } from './simView';
  *
  * Gestures:
  * - press a block + drag horizontally: one swap per column crossed (with hysteresis); the held
- *   block is tracked by id, so it keeps moving with the finger. Vertical motion is ignored. While
+ *   block is tracked by id, so it keeps moving with the finger. Vertical motion of a held block is
+ *   ignored entirely: it never swaps rows and never raises the stack (the block stays held). While
  *   a swap is illegal (locked, mid-swap, …) nothing is emitted; it resumes once legal.
- * - press empty cell / preview row / below the board: raise while held.
- * - second simultaneous pointer (two-finger touch): raise while held.
- * - quick upward swipe anywhere (before any swap of that pointer): raise for a short burst.
+ * - forgiving grab: a press that misses a block by at most `grabSlop` cells (an adjacent cell in
+ *   the same row, the cell above/below — e.g. rise-offset rounding — or just outside the board
+ *   edge) grabs the nearest such block.
+ * - press an empty cell inside the board (or above/beside it): nothing. That pointer stays inert
+ *   even if it is then dragged across onto a block.
+ * - press-and-hold in the zone below the active board (the preview row and further down): raise
+ *   while held. A quick upward swipe that starts there (`belowSwipe`) additionally keeps raising
+ *   for a short burst after the finger lifts.
+ * - `setRaiseButton(active)`: explicit raise source for an on-screen raise button; merged (OR)
+ *   with the below-zone hold and the swipe burst.
+ * - only one pointer drags at a time; extra fingers never raise.
  * - tap a block without dragging: no command, a `select` UI event.
  */
 
@@ -27,11 +36,15 @@ export interface PointerSample {
 }
 
 export interface GestureOptions {
+  /** A press within this distance (in cells) of a block's cell grabs that block. */
+  grabSlop: number;
+  /** Enable the upward swipe burst for swipes that start in the below-board zone. */
+  belowSwipe: boolean;
   /** How far (in cells) past a column boundary the pointer must go to trigger a swap. */
   hysteresis: number;
   /** Max pointer travel (in cells) for a press/release on a block to count as a tap. */
   tapSlop: number;
-  /** Upward speed (cells per second) that counts as a swipe. */
+  /** Upward speed (cells per second) that counts as a swipe (below-zone swipes only). */
   swipeVelocity: number;
   /** Minimum upward travel from the press point (in cells) for a swipe. */
   swipeMinDistance: number;
@@ -44,6 +57,8 @@ export interface GestureOptions {
 }
 
 export const DEFAULT_GESTURE_OPTIONS: Readonly<GestureOptions> = Object.freeze({
+  grabSlop: 0.25,
+  belowSwipe: true,
   hysteresis: 0.375,
   tapSlop: 0.3,
   swipeVelocity: 8,
@@ -65,11 +80,11 @@ export interface GestureHints {
   heldBlockId: number | null;
   /** Grid cell under the drag pointer (null when not dragging or outside the grid). */
   hoverCell: CellRef | null;
-  /** The controller currently holds the raise. */
+  /** The controller currently holds the raise (below-zone hold, swipe burst or raise button). */
   raising: boolean;
 }
 
-type Role = 'drag' | 'raise' | 'idle' | 'swipe';
+type Role = 'drag' | 'raise' | 'idle';
 
 interface PointerState {
   id: number;
@@ -86,6 +101,8 @@ interface PointerState {
   swaps: number;
   /** Max travel from the press point, in px. */
   travel: number;
+  /** A swipe was already reported for this pointer. */
+  swiped: boolean;
 }
 
 export class GestureController {
@@ -95,6 +112,7 @@ export class GestureController {
   private uiEvents: GestureUiEvent[] = [];
   private geometry: BoardGeometry | null = null;
   private burstUntil = -Infinity;
+  private raiseButton = false;
   private now = 0;
   /** Raise state last sent to the sim. */
   private raiseSent = false;
@@ -133,16 +151,18 @@ export class GestureController {
       blockId: null,
       swaps: 0,
       travel: 0,
+      swiped: false,
     };
-    const others = this.pointers.size > 0;
     const hasDrag = this.dragPointer() !== null;
-    const hit = hitTest(geo, p.x, p.y);
-    const block = hit.zone === 'cell' ? this.view.blockAt(hit.row, hit.col) : null;
-    if (block && !hasDrag) {
-      state.role = 'drag';
-      state.blockId = block.id;
-      this.uiEvents.push({ type: 'grab', row: hit.row, col: hit.col, blockId: block.id });
-    } else if (others || hit.zone === 'below' || (hit.zone === 'cell' && !block)) {
+    const grab = this.grabTarget(geo, p.x, p.y);
+    if (grab) {
+      // A second finger on a block while another one drags stays inert (never raises).
+      if (!hasDrag) {
+        state.role = 'drag';
+        state.blockId = grab.blockId;
+        this.uiEvents.push({ type: 'grab', ...grab });
+      }
+    } else if (hitTest(geo, p.x, p.y).zone === 'below') {
       state.role = 'raise';
     }
     this.pointers.set(p.id, state);
@@ -223,11 +243,55 @@ export class GestureController {
     return out;
   }
 
-  /** Drop all pointers; queues a raise release if needed. */
+  /**
+   * Explicit raise source for a dedicated on-screen raise button: raise while `active`. Merged
+   * with the below-zone hold and the swipe burst; the sim sees a single raise state.
+   */
+  setRaiseButton(active: boolean): void {
+    if (this.raiseButton === active) return;
+    this.raiseButton = active;
+    this.refresh();
+  }
+
+  /** Drop all pointers and the raise button; queues a raise release if needed. */
   reset(): void {
     this.pointers.clear();
     this.burstUntil = -Infinity;
+    this.raiseButton = false;
     this.refresh();
+  }
+
+  /**
+   * Block a press at (x, y) grabs: the block under the point, else the nearest block whose cell is
+   * within `grabSlop` cells of the point (adjacent column, row above/below, or just outside the
+   * board edge). Null when nothing is close enough.
+   */
+  private grabTarget(
+    geo: BoardGeometry,
+    x: number,
+    y: number,
+  ): { row: number; col: number; blockId: number } | null {
+    const g = pointToGrid(geo, x, y);
+    const r0 = Math.floor(g.row);
+    const c0 = Math.floor(g.col);
+    const slop = this.options.grabSlop;
+    let best: { row: number; col: number; blockId: number } | null = null;
+    let bestDist = Infinity;
+    for (let row = r0 - 1; row <= r0 + 1; row++) {
+      if (row < 0 || row >= this.view.rows) continue;
+      for (let col = c0 - 1; col <= c0 + 1; col++) {
+        if (col < 0 || col >= this.view.cols) continue;
+        const dx = Math.max(col - g.col, 0, g.col - (col + 1));
+        const dy = Math.max(row - g.row, 0, g.row - (row + 1));
+        const dist = Math.hypot(dx, dy);
+        if (dist > slop || dist >= bestDist) continue;
+        const block = this.view.blockAt(row, col);
+        if (!block) continue;
+        best = { row, col, blockId: block.id };
+        bestDist = dist;
+      }
+    }
+    return best;
   }
 
   private dragPointer(): PointerState | null {
@@ -244,8 +308,9 @@ export class GestureController {
     while (s.samples.length > 2 && s.samples[0]!.t < cutoff) s.samples.shift();
   }
 
+  /** Upward swipe burst: only for pointers that started in the below-board zone. */
   private checkSwipe(s: PointerState, t: number): void {
-    if (s.role === 'drag' && s.swaps > 0) return;
+    if (s.role !== 'raise' || !this.options.belowSwipe) return;
     const geo = this.geometry;
     if (!geo) return;
     const first = s.samples[0]!;
@@ -261,12 +326,8 @@ export class GestureController {
       speed >= this.options.swipeVelocity
     ) {
       this.burstUntil = Math.max(this.burstUntil, t + this.options.swipeBurstMs);
-      if (s.role !== 'swipe') {
-        if (s.role === 'drag' && s.blockId !== null) {
-          this.uiEvents.push({ type: 'release', blockId: s.blockId });
-        }
-        s.role = 'swipe';
-        s.blockId = null;
+      if (!s.swiped) {
+        s.swiped = true;
         this.uiEvents.push({ type: 'swipe' });
       }
     }
@@ -294,7 +355,7 @@ export class GestureController {
   private refresh(): void {
     let raisePointer = false;
     for (const s of this.pointers.values()) if (s.role === 'raise') raisePointer = true;
-    const raising = raisePointer || this.now < this.burstUntil;
+    const raising = raisePointer || this.raiseButton || this.now < this.burstUntil;
     if (raising !== this.raiseSent) {
       this.commands.push({ type: 'raise', active: raising });
       this.raiseSent = raising;

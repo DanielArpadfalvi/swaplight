@@ -64,7 +64,7 @@ caught in a blast detonate too), so a blast is one bigger combo. `garbage` still
 ```
 idle ──swap──▶ swapping (4) ──▶ idle
 idle ──support lost──▶ hovering (12) ──▶ falling (1 cell/tick) ──▶ landing (10, cosmetic) ──▶ idle
-idle/landing ──match──▶ matched (flash 44) ──▶ popping ──▶ popped (one per 9 ticks, reading order)
+idle/landing ──match──▶ matched (flash 26) ──▶ popping ──▶ popped (one per 5 ticks, reading order)
      group cleared when the last pop's slot ends: flash + size × 9 ticks after the match
 ```
 

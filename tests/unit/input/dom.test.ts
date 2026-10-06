@@ -71,13 +71,13 @@ describe('bindPointerInput', () => {
 
   it('pointercancel drops the pointer; unbind stops forwarding', () => {
     const { ctl, el, unbind } = setup();
-    el.dispatchEvent(pointer('pointerdown', 1, 20, 5 * 40));
+    el.dispatchEvent(pointer('pointerdown', 1, 20, 13 * 40)); // below the board → raise
     expect(ctl.hints.raising).toBe(true);
-    el.dispatchEvent(pointer('pointercancel', 1, 20, 5 * 40));
+    el.dispatchEvent(pointer('pointercancel', 1, 20, 13 * 40));
     expect(ctl.hints.raising).toBe(false);
     unbind();
     ctl.takeCommands();
-    el.dispatchEvent(pointer('pointerdown', 2, 20, 5 * 40));
+    el.dispatchEvent(pointer('pointerdown', 2, 20, 13 * 40));
     expect(ctl.activePointers).toBe(0);
     expect(ctl.takeCommands()).toEqual([]);
   });

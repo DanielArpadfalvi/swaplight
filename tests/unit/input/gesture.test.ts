@@ -176,20 +176,21 @@ describe('GestureController – rise offset', () => {
     expect(h.ctl.hints.heldBlockId).toBe(r.id);
     expect(h.ctl.hints.raising).toBe(false);
     h.ctl.pointerUp({ id: 1, x: geo.originX + 20, y, t: h.t + 50 }, geo);
-    // The same pixel without rise is empty space → raise.
+    // The same pixel without rise is row 10.75: empty, but within grab slop of the block below.
     h.sim.riseOffset = 0;
     h.ctl.pointerDown({ id: 2, x: geo.originX + 20, y, t: h.t + 100 }, h.geo());
-    expect(h.ctl.hints.raising).toBe(true);
+    expect(h.ctl.hints.heldBlockId).toBe(r.id);
+    expect(h.ctl.hints.raising).toBe(false);
   });
 
   it('keeps tracking the held block when the stack rises a row', () => {
     const h = new Harness('RGBYPG', { mode: 'endless' });
     const r = cellAt(h.sim, BOTTOM, 0)!;
     h.down(1, 11.5, 0.5);
-    h.down(2, 5.5, 3); // second finger: raise
+    h.ctl.setRaiseButton(true);
     for (let i = 0; i < 30 && h.sim.stats.rowsRisen === 0; i++) h.tick();
     expect(h.sim.stats.rowsRisen).toBe(1);
-    h.up(2, 5.5, 3, 0);
+    h.ctl.setRaiseButton(false);
     for (let i = 0; i < 30 && h.sim.manualRaising; i++) h.tick();
     const at = h.view.locate(r.id)!;
     expect(at.row).toBeLessThan(BOTTOM);
@@ -201,31 +202,156 @@ describe('GestureController – rise offset', () => {
   });
 });
 
-describe('GestureController – raise', () => {
-  it('press on empty space raises while held', () => {
-    const h = new Harness('RGBYPG', { mode: 'endless' });
-    h.down(1, 5.5, 2.5);
-    expect(h.ctl.hints.raising).toBe(true);
-    expect(h.tick(1)).toEqual([{ type: 'raise', active: true }]);
-    expect(h.sim.raiseHeld).toBe(true);
-    h.tick(3);
-    expect(h.sim.riseOffset).toBeGreaterThan(0);
-    h.move(1, 5.6, 3.5, 300);
-    h.up(1, 5.6, 3.5, 300);
-    expect(h.ctl.hints.raising).toBe(false);
-    expect(h.tick(1)).toEqual([{ type: 'raise', active: false }]);
-    expect(h.sim.raiseHeld).toBe(false);
-    expect(swaps(h.sent)).toEqual([]);
+describe('GestureController – forgiving grab', () => {
+  it('a press just beside a block in the same row grabs it', () => {
+    const h = new Harness('R.G...');
+    const r = cellAt(h.sim, BOTTOM, 0)!;
+    const g = cellAt(h.sim, BOTTOM, 2)!;
+    h.down(1, 11.5, 1.2); // 0.2 cell right of R
+    expect(h.ctl.hints.heldBlockId).toBe(r.id);
+    h.up(1, 11.5, 1.2);
+    h.down(2, 11.5, 1.85, 100); // 0.15 cell left of G: nearer to G
+    expect(h.ctl.hints.heldBlockId).toBe(g.id);
+    h.up(2, 11.5, 1.85);
+    expect(h.tick(3)).toEqual([]);
   });
 
-  it('press below the stack (preview row and further down) raises', () => {
+  it('a press just above the top of a column grabs the top block', () => {
+    const h = new Harness('R.....\nGB....');
+    const r = cellAt(h.sim, 10, 0)!;
+    h.down(1, 9.8, 0.5);
+    expect(h.ctl.hints.heldBlockId).toBe(r.id);
+    expect(h.ctl.takeUiEvents()).toEqual([{ type: 'grab', row: 10, col: 0, blockId: r.id }]);
+  });
+
+  it('a press just below the bottom row grabs the bottom block instead of raising', () => {
+    const h = new Harness('RGBYPG', { mode: 'endless' });
+    const b = cellAt(h.sim, BOTTOM, 2)!;
+    h.down(1, 12.15, 2.5);
+    expect(h.ctl.hints.heldBlockId).toBe(b.id);
+    expect(h.ctl.hints.raising).toBe(false);
+    expect(h.tick(3)).toEqual([]);
+  });
+
+  it('a press clearly in an empty cell grabs nothing', () => {
+    const h = new Harness('R.G...');
+    h.down(1, 11.5, 1.5);
+    expect(h.ctl.hints.heldBlockId).toBeNull();
+    expect(h.ctl.takeUiEvents()).toEqual([]);
+  });
+});
+
+describe('GestureController – raise', () => {
+  it('regression: vertical drag on a held block never raises, the block stays held', () => {
+    const h = new Harness('RGBYPG', { mode: 'endless' });
+    const r = cellAt(h.sim, BOTTOM, 2)!;
+    h.down(1, 11.5, 2.5);
+    // Fast upward flick (used to trigger the swipe-raise burst)...
+    h.move(1, 10.8, 2.55, 16);
+    h.move(1, 9.9, 2.6, 16);
+    h.move(1, 7, 2.6, 16);
+    // ...and a slow drag back down past the bottom of the board.
+    for (let i = 0; i < 10; i++) h.move(1, 7 + i * 0.7, 2.5, 50);
+    expect(h.ctl.hints.heldBlockId).toBe(r.id);
+    expect(h.ctl.hints.raising).toBe(false);
+    h.tick(30);
+    h.up(1, 13.5, 2.5);
+    h.tick(30);
+    expect(raises(h.sent)).toEqual([]);
+    expect(swaps(h.sent)).toEqual([]);
+    expect(h.sim.stats.rowsRisen).toBe(0);
+    // Only the slow auto-rise moved the stack: same offset as an untouched sim after 60 ticks.
+    const idle = new Harness('RGBYPG', { mode: 'endless' });
+    idle.tick(60);
+    expect(h.sim.riseOffset).toBe(idle.sim.riseOffset);
+    expect(h.ctl.takeUiEvents().map((e) => e.type)).toEqual(['grab', 'release']);
+  });
+
+  it('a held block still swaps horizontally while the finger also drifts vertically', () => {
+    const h = new Harness('RGBYPG', { mode: 'endless' });
+    h.down(1, 11.5, 0.5);
+    h.move(1, 9, 0.6, 16); // fast upward flick
+    h.move(1, 9, 1.5, 16);
+    h.tick(3);
+    expect(swaps(h.sent)).toEqual([{ type: 'swap', row: 11, col: 0 }]);
+    expect(raises(h.sent)).toEqual([]);
+  });
+
+  it('regression: press on an empty cell does not raise', () => {
+    const h = new Harness('RGBYPG', { mode: 'endless' });
+    h.down(1, 5.5, 2.5);
+    expect(h.ctl.hints.raising).toBe(false);
+    h.tick(10);
+    h.up(1, 5.5, 2.5, 500);
+    h.tick(10);
+    expect(raises(h.sent)).toEqual([]);
+    expect(h.sim.riseOffset).toBe(0);
+  });
+
+  it('press on an empty cell then dragging across into a block does nothing', () => {
+    const h = new Harness('Y.....\nRGBYPG');
+    h.down(1, 10.5, 2.5); // empty cell next to nothing
+    h.move(1, 10.5, 1.5);
+    h.move(1, 10.5, 0.5); // now over Y
+    h.move(1, 11.5, 0.5); // and over R
+    h.move(1, 11.5, 3.5);
+    h.up(1, 11.5, 3.5);
+    h.tick(10);
+    expect(h.sent).toEqual([]);
+    expect(h.ctl.takeUiEvents()).toEqual([]);
+    expect(boardToAscii(h.sim)).toBe('Y.....\nRGBYPG');
+  });
+
+  it('press-and-hold below the stack (preview row and further down) raises', () => {
     for (const row of [12.5, 14]) {
-      const h = new Harness('RGBYPG');
+      const h = new Harness('RGBYPG', { mode: 'endless' });
       h.down(1, row, 2.5);
+      expect(h.ctl.hints.raising).toBe(true);
       expect(h.tick(1)).toEqual([{ type: 'raise', active: true }]);
+      expect(h.sim.raiseHeld).toBe(true);
+      h.tick(3);
+      expect(h.sim.riseOffset).toBeGreaterThan(0);
       h.up(1, row, 2.5, 500);
       expect(h.tick(1)).toEqual([{ type: 'raise', active: false }]);
+      expect(h.sim.raiseHeld).toBe(false);
     }
+  });
+
+  it('a below-zone hold dragged up into the board keeps raising and never swaps', () => {
+    const h = new Harness('RGBYPG');
+    h.down(1, 12.5, 0.5);
+    h.move(1, 11.5, 0.5, 400);
+    h.move(1, 11.5, 3.5, 400);
+    h.tick(5);
+    expect(swaps(h.sent)).toEqual([]);
+    expect(h.ctl.hints.raising).toBe(true);
+  });
+
+  it('setRaiseButton raises while active', () => {
+    const h = new Harness('RGBYPG', { mode: 'endless' });
+    h.ctl.setRaiseButton(true);
+    h.ctl.setRaiseButton(true); // idempotent
+    expect(h.ctl.hints.raising).toBe(true);
+    expect(h.tick(1)).toEqual([{ type: 'raise', active: true }]);
+    h.tick(3);
+    expect(h.sim.riseOffset).toBeGreaterThan(0);
+    h.ctl.setRaiseButton(false);
+    expect(h.tick(1)).toEqual([{ type: 'raise', active: false }]);
+    expect(raises(h.sent)).toHaveLength(2);
+  });
+
+  it('raise button and below-zone hold are merged into one raise state', () => {
+    const h = new Harness('RGBYPG');
+    h.ctl.setRaiseButton(true);
+    h.down(1, 13, 2.5);
+    h.ctl.setRaiseButton(false);
+    expect(h.ctl.hints.raising).toBe(true);
+    h.up(1, 13, 2.5, 200);
+    expect(h.ctl.hints.raising).toBe(false);
+    expect(h.tick()).toEqual([
+      { type: 'raise', active: true },
+      { type: 'raise', active: false },
+    ]);
   });
 
   it('press above or beside the board does nothing', () => {
@@ -243,15 +369,15 @@ describe('GestureController – raise', () => {
     expect(h.tick(3)).toEqual([]);
   });
 
-  it('a quick upward swipe anywhere gives a short raise burst (~1 row)', () => {
+  it('a quick upward swipe from below the board gives a short raise burst (~1 row)', () => {
     const h = new Harness('RGBYPG', { mode: 'endless', gesture: { swipeBurstMs: 120 } });
-    h.down(1, -1, 3); // above the board: no hold
-    expect(h.peek()).toEqual([]);
-    h.move(1, -1.4, 3, 16);
-    h.move(1, -2.2, 3.05, 16); // 1.2 cells in 32 ms ≈ 37 cells/s
-    expect(h.ctl.takeUiEvents()).toEqual([{ type: 'swipe' }]);
+    h.down(1, 14, 3);
     expect(h.ctl.hints.raising).toBe(true);
-    h.up(1, -2.4, 3.05, 16);
+    h.move(1, 13.6, 3, 16);
+    h.move(1, 12.8, 3.05, 16); // 1.2 cells in 32 ms ≈ 37 cells/s
+    expect(h.ctl.takeUiEvents()).toEqual([{ type: 'swipe' }]);
+    h.up(1, 12.6, 3.05, 16);
+    expect(h.ctl.hints.raising).toBe(true);
     const perTick = Array.from({ length: 12 }, () => h.tick());
     expect(perTick[0]).toEqual([{ type: 'raise', active: true }]);
     // The burst is timed from the last swipe sample (the up event): 120 ms ≈ 8 ticks.
@@ -264,61 +390,54 @@ describe('GestureController – raise', () => {
     expect(h.sim.riseOffset).toBe(0);
   });
 
-  it('a swipe starting on a block (before any swap) releases the block and raises', () => {
-    const h = new Harness('RGBYPG', { mode: 'endless' });
-    const r = cellAt(h.sim, BOTTOM, 2)!;
-    h.down(1, 11.5, 2.5);
-    expect(h.ctl.hints.heldBlockId).toBe(r.id);
-    h.move(1, 10.8, 2.55, 16);
-    h.move(1, 9.9, 2.6, 16);
-    expect(h.ctl.hints.heldBlockId).toBeNull();
-    expect(h.ctl.hints.raising).toBe(true);
-    expect(h.ctl.takeUiEvents().map((e) => e.type)).toEqual(['grab', 'release', 'swipe']);
-    h.move(1, 9.9, 4.5, 16); // no longer a drag
-    h.up(1, 9.9, 4.5, 16);
-    h.tick(30);
-    expect(swaps(h.sent)).toEqual([]);
-    expect(h.sim.stats.rowsRisen).toBe(1);
-  });
-
-  it('a slow upward movement is not a swipe', () => {
-    const h = new Harness('RGBYPG');
-    h.down(1, -1, 3);
-    for (let i = 1; i <= 10; i++) h.move(1, -1 - i * 0.1, 3, 50); // 2 cells/s
-    h.up(1, -2, 3, 50);
+  it('the below-zone swipe burst can be disabled', () => {
+    const h = new Harness('RGBYPG', { gesture: { belowSwipe: false } });
+    h.down(1, 14, 3);
+    h.move(1, 13.6, 3, 16);
+    h.move(1, 12.8, 3.05, 16);
+    h.up(1, 12.6, 3.05, 16);
     expect(h.ctl.takeUiEvents()).toEqual([]);
-    expect(h.tick(5)).toEqual([]);
+    expect(h.ctl.hints.raising).toBe(false);
   });
 
-  it('a drag that already swapped does not turn into a swipe', () => {
+  it('a quick upward swipe above the board or on empty cells does nothing', () => {
     const h = new Harness('RGBYPG');
-    h.down(1, 11.5, 0.5);
-    h.move(1, 11.5, 1.5);
-    h.tick(1);
-    h.move(1, 10, 1.5, 16);
-    h.move(1, 8, 1.6, 16);
+    for (const startRow of [-1, 6]) {
+      h.down(1, startRow, 3, 500);
+      h.move(1, startRow - 0.4, 3, 16);
+      h.move(1, startRow - 1.2, 3.05, 16);
+      h.up(1, startRow - 1.4, 3.05, 16);
+    }
+    expect(h.ctl.takeUiEvents()).toEqual([]);
+    expect(h.tick(10)).toEqual([]);
+  });
+
+  it('a slow upward movement from below is not a swipe', () => {
+    const h = new Harness('RGBYPG');
+    h.down(1, 14, 3);
+    for (let i = 1; i <= 10; i++) h.move(1, 14 - i * 0.1, 3, 50); // 2 cells/s
+    h.up(1, 13, 3, 50);
+    expect(h.ctl.takeUiEvents()).toEqual([]);
     expect(h.ctl.hints.raising).toBe(false);
-    expect(h.ctl.hints.heldBlockId).not.toBeNull();
   });
 });
 
 describe('GestureController – multi-touch', () => {
-  it('a second finger raises while the first keeps dragging', () => {
+  it('regression: a second finger never raises', () => {
     const h = new Harness('RGBYPG', { mode: 'endless' });
     const r = cellAt(h.sim, BOTTOM, 0)!;
     h.down(1, 11.5, 0.5);
-    h.down(2, 11.5, 4.5); // on a block, but a drag is already active → raise
-    expect(h.ctl.activePointers).toBe(2);
-    expect(h.ctl.hints).toMatchObject({ heldBlockId: r.id, raising: true });
-    h.move(2, 11.5, 2.5); // moving the raise finger never swaps
+    h.down(2, 11.5, 4.5); // on a block, but a drag is already active → inert
+    h.down(3, 5.5, 3.5); // empty cell → inert
+    expect(h.ctl.activePointers).toBe(3);
+    expect(h.ctl.hints).toMatchObject({ heldBlockId: r.id, raising: false });
+    h.move(2, 11.5, 2.5); // moving the inert finger never swaps
     h.move(1, 11.5, 1.5);
-    const cmds = h.tick();
-    expect(cmds).toEqual([
-      { type: 'raise', active: true },
-      { type: 'swap', row: 11, col: 0 },
-    ]);
+    expect(h.tick()).toEqual([{ type: 'swap', row: 11, col: 0 }]);
     h.up(2, 11.5, 2.5, 200);
-    expect(h.tick()).toEqual([{ type: 'raise', active: false }]);
+    h.up(3, 5.5, 3.5, 200);
+    h.tick(5);
+    expect(raises(h.sent)).toEqual([]);
     expect(h.ctl.hints.heldBlockId).toBe(r.id);
   });
 
@@ -333,9 +452,9 @@ describe('GestureController – multi-touch', () => {
     expect(cellAt(h.sim, BOTTOM, 5)).toBe(g);
   });
 
-  it('when the first finger is raising, a second finger on a block drags', () => {
+  it('a below-zone raise finger and a drag finger work together', () => {
     const h = new Harness('RGBYPG');
-    h.down(1, 5.5, 0.5); // empty → raise
+    h.down(1, 13, 0.5); // below → raise
     h.down(2, 11.5, 0.5);
     h.move(2, 11.5, 1.5);
     expect(h.tick()).toEqual([
@@ -344,13 +463,13 @@ describe('GestureController – multi-touch', () => {
     ]);
   });
 
-  it('raise stays active until every raise pointer is up', () => {
+  it('raise stays active until every below-zone pointer is up', () => {
     const h = new Harness('RGBYPG');
-    h.down(1, 5.5, 0.5);
-    h.down(2, 4.5, 3.5);
-    h.up(1, 5.5, 0.5, 200);
+    h.down(1, 12.5, 0.5);
+    h.down(2, 13.5, 3.5);
+    h.up(1, 12.5, 0.5, 200);
     expect(h.ctl.hints.raising).toBe(true);
-    h.up(2, 4.5, 3.5, 200);
+    h.up(2, 13.5, 3.5, 200);
     expect(h.ctl.hints.raising).toBe(false);
     // Pressed and released between two ticks: both edges are delivered, in order.
     expect(h.tick()).toEqual([
@@ -378,14 +497,16 @@ describe('GestureController – cancel / reset', () => {
 
   it('cancel and reset release the raise', () => {
     const h = new Harness('RGBYPG');
-    h.down(1, 5.5, 0.5);
+    h.down(1, 13, 0.5);
     h.tick();
     h.ctl.pointerCancel(1);
     expect(h.tick()).toEqual([{ type: 'raise', active: false }]);
-    h.down(2, 5.5, 0.5);
+    h.down(2, 13, 0.5);
+    h.ctl.setRaiseButton(true);
     h.tick();
     h.ctl.reset();
     expect(h.ctl.activePointers).toBe(0);
+    expect(h.ctl.hints.raising).toBe(false);
     expect(h.tick()).toEqual([{ type: 'raise', active: false }]);
   });
 

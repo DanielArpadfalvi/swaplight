@@ -40,11 +40,13 @@ describe('blockRenderPos', () => {
 
   it('reports flash and pop progress', () => {
     const sim = simFromAscii('RRR...');
+    const { flashTicks, popTicksPerBlock } = sim.config;
+    const half = Math.floor(flashTicks / 2);
     run(sim, 1);
     expect(blockRenderPos(sim, 66)!.flashProgress).toBe(0);
-    run(sim, 22);
-    expect(blockRenderPos(sim, 66)!.flashProgress).toBe(0.5);
-    run(sim, 22);
+    run(sim, half);
+    expect(blockRenderPos(sim, 66)!.flashProgress).toBeCloseTo(half / flashTicks);
+    run(sim, flashTicks - half);
     const first = blockRenderPos(sim, 66)!;
     expect(first.state).toBe('popped');
     expect(first.flashProgress).toBe(1);
@@ -52,8 +54,8 @@ describe('blockRenderPos', () => {
     expect(blockRenderPos(sim, 68)!.state).toBe('popping');
     expect(blockRenderPos(sim, 68)!.popProgress).toBe(0);
     run(sim, 3);
-    expect(blockRenderPos(sim, 66)!.popProgress).toBeCloseTo(3 / 9);
-    run(sim, 20);
+    expect(blockRenderPos(sim, 66)!.popProgress).toBeCloseTo(3 / popTicksPerBlock);
+    run(sim, 2 * popTicksPerBlock);
     expect(blockRenderPos(sim, 66)!.popProgress).toBe(1);
   });
 

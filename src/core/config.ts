@@ -79,8 +79,8 @@ export const DEFAULT_CONFIG: Readonly<SimConfig> = Object.freeze({
   fallSpeed: SUBUNITS_PER_CELL,
   landTicks: 10,
 
-  flashTicks: 44,
-  popTicksPerBlock: 9,
+  flashTicks: 26,
+  popTicksPerBlock: 5,
 
   // Level 1: 16 sub-units / 0.02 per tick = 800 ticks (~13 s) per row.
   riseSpeedBase: 20,
