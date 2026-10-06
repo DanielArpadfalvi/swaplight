@@ -108,7 +108,7 @@
   min-width: 64px;
   padding: 6px 12px;
   border-radius: 999px;
-  font-size: 17px;
+  font-size: calc(17px * var(--fs, 1));
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   color: #fff6d6;
@@ -176,7 +176,7 @@
 }
 
 .run-continue-title {
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.12em;
@@ -184,7 +184,7 @@
 }
 
 .run-continue-where {
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   color: #ffd2ef;
 }
 
@@ -222,6 +222,7 @@
 }
 
 .run-foot {
+  position: relative;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
@@ -238,8 +239,8 @@
 }
 
 .run-abandon {
-  min-height: 36px;
-  font-size: 12px;
+  min-height: 44px;
+  font-size: calc(12px * var(--fs, 1));
 }
 
 .btn-danger {
@@ -267,7 +268,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
   color: var(--text);
   background: rgba(30, 20, 66, 0.8);
   border: 1px solid rgba(122, 60, 255, 0.45);
@@ -351,7 +352,7 @@
 }
 
 .deck-name {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.06em;
@@ -359,7 +360,7 @@
 }
 
 .deck-desc {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--fs, 1));
   line-height: 1.3;
   color: var(--text-dim);
 }
@@ -370,14 +371,29 @@
   gap: 6px;
 }
 
+/* Eight 44 px pips do not fit a narrow phone: two rows of four. */
+@media (max-width: 459px) {
+  .bright-row {
+    grid-template-columns: repeat(4, 1fr);
+    row-gap: 8px;
+  }
+
+  .bright-pip {
+    justify-self: center;
+    width: 46px;
+  }
+}
+
 .bright-pip {
   --lvl: 1;
   aspect-ratio: 1;
+  min-width: 44px;
+  min-height: 44px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   font-family: inherit;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   font-weight: 900;
   color: #fff;
   cursor: pointer;
@@ -406,18 +422,18 @@
   gap: 3px;
   padding: 10px 12px;
   border-radius: 14px;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   background: rgba(255, 210, 63, 0.06);
   border: 1px solid rgba(255, 210, 63, 0.3);
 }
 
 .bright-info strong {
   color: var(--spark);
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
 }
 
 .bright-hint {
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
   color: var(--text-dim);
 }
 
@@ -425,6 +441,21 @@
 
 .run-map-body {
   gap: 14px;
+}
+
+/* Short screens: tighter act rows so the stage card shows more above the footer. */
+@media (max-height: 700px) {
+  .run-map-body {
+    gap: 10px;
+  }
+
+  .acts {
+    gap: 6px;
+  }
+
+  .act-row {
+    padding: 6px 10px;
+  }
 }
 
 .acts {
@@ -595,7 +626,7 @@
 
 .stage-card-kicker,
 .intro-kicker {
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.3em;
   text-transform: uppercase;
@@ -604,7 +635,7 @@
 
 .stage-card-title {
   margin: 0;
-  font-size: 18px;
+  font-size: calc(18px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.04em;
@@ -615,7 +646,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   font-weight: 800;
   color: #e9fbff;
 }
@@ -628,7 +659,7 @@
 .stage-card-facts {
   display: flex;
   gap: 16px;
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   color: var(--text-dim);
 }
 
@@ -651,12 +682,12 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   color: #ffd0d6;
 }
 
 .curse-line strong {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   color: #fff;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -825,7 +856,7 @@
   justify-content: center;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   color: var(--text-dim);
 }
 
@@ -848,7 +879,7 @@
   justify-content: space-between;
   padding: 9px 12px;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   font-weight: 700;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 210, 63, 0.25);
@@ -877,7 +908,7 @@
   justify-content: space-between;
   padding: 10px 14px;
   border-radius: 14px;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -945,7 +976,7 @@
   gap: 2px;
   padding: 10px;
   border-radius: 14px;
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   color: var(--text-dim);
   background: linear-gradient(90deg, rgba(255, 210, 63, 0.18), rgba(255, 79, 191, 0.18));
   border: 1.5px solid rgba(255, 210, 63, 0.85);
@@ -955,7 +986,7 @@
 }
 
 .unlock-banner strong {
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   color: var(--spark);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -982,19 +1013,22 @@
 }
 
 .run-hud-top .icon-btn {
-  flex: 0 0 40px;
-  height: 40px;
+  flex: 0 0 44px;
+  height: 44px;
 }
 
+/* The clock never shrinks below its digits: the stage chip and the Sparks pill give way. */
 .run-stage-chip {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 4px;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-radius: 10px;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.06em;
@@ -1014,18 +1048,28 @@
 .run-stage-act {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
+}
+
+.run-curse-more {
+  flex: 0 0 auto;
+  font-size: calc(12px * var(--fs, 1));
+  font-style: normal;
+  letter-spacing: 0;
 }
 
 .run-clock {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 1 0 auto;
+  min-width: max-content;
+  padding: 0 8px;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   height: 36px;
   border-radius: 10px;
-  font-size: 18px;
+  font-size: calc(18px * var(--fs, 1));
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   background: linear-gradient(180deg, rgba(40, 26, 84, 0.62), rgba(18, 12, 42, 0.62));
@@ -1046,14 +1090,16 @@
 }
 
 .run-sparks {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-radius: 10px;
-  font-size: 17px;
+  white-space: nowrap;
+  font-size: calc(16px * var(--fs, 1));
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   color: #fff6d6;
@@ -1114,7 +1160,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 10px;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   font-weight: 900;
   color: #fff;
   text-shadow:
@@ -1128,7 +1174,7 @@
   gap: 5px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
 }
 
 .run-goal-value {
@@ -1137,7 +1183,7 @@
 
 .run-chips {
   position: relative;
-  height: 46px;
+  height: 42px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1293,6 +1339,8 @@
 
 .run-relic-slot {
   pointer-events: auto;
+  position: relative;
+  flex: 0 0 auto;
   width: 38px;
   height: 38px;
   padding: 0;
@@ -1349,7 +1397,7 @@
   gap: 2px;
   padding: 10px 12px;
   border-radius: 12px;
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--fs, 1));
   color: var(--text);
   background: rgba(16, 10, 38, 0.97);
   border: 1px solid rgba(255, 210, 63, 0.6);
@@ -1359,7 +1407,7 @@
 }
 
 .run-tip strong {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   color: var(--spark);
 }
 
@@ -1467,7 +1515,7 @@
 
 .run-charm-card-text h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: calc(18px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.04em;
@@ -1476,7 +1524,7 @@
 
 .run-charm-card-text p {
   margin: 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   line-height: 1.35;
   color: var(--text-dim);
 }
@@ -1490,14 +1538,14 @@
 .run-charm-card-actions .btn {
   flex: 1 1 0;
   padding: 0 10px;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
 }
 
 .rarity-tag {
   align-self: flex-start;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 9.5px;
+  font-size: calc(9.5px * var(--fs, 1));
   font-weight: 900;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -1522,7 +1570,7 @@
   gap: 10px;
   padding: 8px 8px 8px 10px;
   border-radius: 999px;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.08em;
@@ -1584,7 +1632,7 @@
 }
 
 .shop-sub {
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -1622,6 +1670,7 @@
 
 .offer-card {
   --rarity: #5aa9ff;
+  container-type: inline-size;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -1672,7 +1721,7 @@
   transform: translateX(-50%);
   padding: 2px 8px;
   border-radius: 0 0 8px 8px;
-  font-size: 8.5px;
+  font-size: calc(8.5px * var(--fs, 1));
   font-weight: 900;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1689,8 +1738,10 @@
 
 .offer-name {
   max-width: 100%;
-  overflow-wrap: anywhere;
-  font-size: 12px;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  /* Shrinks so the longest word (--word letters, set in code) fits the card on one line. */
+  font-size: min(calc(12px * var(--fs, 1)), calc(100cqi / (var(--word, 8) * 0.78)));
   font-weight: 900;
   font-style: italic;
   line-height: 1.15;
@@ -1700,26 +1751,26 @@
 
 .offer-desc {
   flex: 1 1 auto;
-  font-size: 10.5px;
+  font-size: calc(10.5px * var(--fs, 1));
   line-height: 1.3;
   color: var(--text-dim);
 }
 
 .offer-charm .offer-desc {
-  font-size: 11.5px;
+  font-size: calc(11.5px * var(--fs, 1));
 }
 
 .offer-buy {
   pointer-events: auto;
   width: 100%;
-  min-height: 34px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
   border-radius: 10px;
   font-family: inherit;
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   font-weight: 900;
   color: #1a1000;
   cursor: pointer;
@@ -1758,7 +1809,7 @@
 
 .reroll-btn {
   min-height: 46px;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   border-color: rgba(30, 200, 255, 0.55);
 }
 
@@ -1803,12 +1854,12 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   color: var(--text-dim);
 }
 
 .sell-text strong {
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   color: var(--text);
 }
 
@@ -1818,7 +1869,7 @@
 }
 
 .next-preview {
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   text-align: center;
   color: var(--text);
 }

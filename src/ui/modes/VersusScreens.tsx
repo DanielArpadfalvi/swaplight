@@ -7,11 +7,15 @@ import {
   type GarbageIcon,
 } from '../../game/versus';
 import type { VersusRecord } from '../../game/save';
+import { versusNeedsLeaveConfirm } from '../../game/nav';
 import { formatClock } from '../../game/state';
 import { t, type TranslationKey } from '../../i18n';
 import { useFormat } from '../format';
+import { useFitText } from '../fit';
 import { IconBack, IconLock, IconPlay } from '../icons';
 import { useCountUp } from '../useCountUp';
+import { ScrollMore } from '../ScrollMore';
+import { useScrollMore } from '../useScrollMore';
 
 interface Props {
   state: GameUiState;
@@ -97,6 +101,7 @@ function recordText(r: VersusRecord | undefined): string {
 /* ------------------------------------------------------------------- difficulty select */
 
 export function VersusSetupScreen({ state, actions, leaving }: Props) {
+  const [bodyRef, more] = useScrollMore<HTMLDivElement>();
   const { level, format } = state.versusSetup;
   const full = state.fullVersion;
   return (
@@ -106,7 +111,7 @@ export function VersusSetupScreen({ state, actions, leaving }: Props) {
     >
       <div class="sheet-frame">
         <SheetHeader title={t('versus.title')} onBack={() => actions.menu()} />
-        <div class="sheet-body">
+        <div class={`sheet-body${more ? ' has-more' : ''}`} ref={bodyRef}>
           <section class="section">
             <h3 class="section-title">{t('versus.chooseOpponent')}</h3>
             <div class="vs-levels" role="radiogroup" aria-label={t('versus.chooseOpponent')}>
@@ -169,6 +174,7 @@ export function VersusSetupScreen({ state, actions, leaving }: Props) {
           </section>
         </div>
         <footer class="run-foot">
+          <ScrollMore show={more} />
           <button
             type="button"
             class="btn btn-primary btn-play vs-fight"
@@ -336,6 +342,8 @@ function OpponentCard({ state }: { state: GameUiState }) {
   const hud = state.versusHud!;
   const card = state.versusLayout!.card;
   const need = vs.format === 'bo3' ? 2 : 1;
+  const name = cpuName(vs.level);
+  const nameRef = useFitText<HTMLSpanElement>(name, 13, 7);
   return (
     <div
       class={`vs-opp${hud.oppDanger ? ' is-danger' : ''}`}
@@ -348,7 +356,9 @@ function OpponentCard({ state }: { state: GameUiState }) {
       data-testid="vs-opponent"
     >
       <CpuAvatar level={vs.level} size={40} />
-      <span class="vs-opp-name">{cpuName(vs.level)}</span>
+      <span class="vs-opp-name" ref={nameRef}>
+        {name}
+      </span>
       <span class="vs-level-pill">{levelName(vs.level)}</span>
       {vs.format === 'bo3' && (
         <span class="vs-pips vs-opp-pips">
@@ -468,9 +478,53 @@ export function VersusResultScreen({ state, actions, leaving }: Props) {
           type="button"
           class="btn btn-ghost btn-quiet"
           data-testid="vs-menu"
-          onClick={() => actions.menu()}
+          onClick={() =>
+            versusNeedsLeaveConfirm(state) ? actions.openOverlay('leaveConfirm') : actions.menu()
+          }
         >
           {t('gameOver.mainMenu')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Leaving an undecided match (pause → menu, back between rounds) forfeits it: confirm first. */
+export function LeaveMatchDialog({
+  actions,
+  leaving,
+  z,
+}: {
+  actions: GameActions;
+  leaving: boolean;
+  z: number;
+}) {
+  return (
+    <div
+      class={`overlay overlay-dim dialog${leaving ? ' is-leaving' : ''}`}
+      style={{ zIndex: z }}
+      data-testid="leave-confirm"
+      role="alertdialog"
+      aria-modal="true"
+    >
+      <div class="panel panel-danger">
+        <h2 class="panel-title title-danger">{t('versus.leaveTitle')}</h2>
+        <p class="panel-body">{t('versus.leaveBody')}</p>
+        <button
+          type="button"
+          class="btn btn-primary"
+          data-testid="leave-stay"
+          onClick={() => actions.closeOverlay()}
+        >
+          {t('versus.leaveStay')}
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-danger"
+          data-testid="leave-yes"
+          onClick={() => actions.menu()}
+        >
+          {t('versus.leaveConfirm')}
         </button>
       </div>
     </div>

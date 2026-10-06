@@ -40,9 +40,27 @@ describe('goal curve', () => {
   });
 
   it('survive runs at an elevated speed level; chains need ×3 in act 3', () => {
-    expect(makeGoal('survive', 1, 0, 1).startLevel).toBe(5);
+    // Act 1 is gentler (+2), later acts +4.
+    expect(makeGoal('survive', 1, 0, 1).startLevel).toBe(3);
+    expect(makeGoal('survive', 2, 0, 1).startLevel).toBe(7);
     expect(makeGoal('chainTarget', 3, 0, 1).chainLength).toBe(3);
     expect(makeGoal('chainTarget', 1, 0, 1)).toMatchObject({ chainLength: 2, target: 1 });
+  });
+});
+
+describe('act 1 is welcoming', () => {
+  it('act-1 targets are below act 2 and stay at speed level 1', () => {
+    for (let stage = 0; stage < 4; stage++) {
+      const g = makeGoal('scoreInTime', 1, stage, 1);
+      expect(g.startLevel).toBe(1);
+      expect(g.target).toBeLessThanOrEqual(500);
+    }
+    expect(makeGoal('scoreInTime', 1, 0, 1).target).toBe(360);
+    expect(makeGoal('scoreInTime', 2, 0, 1).target).toBe(1400);
+    expect(makeGoal('clearBlocks', 1, 2, 1).target).toBe(46);
+    expect(makeGoal('chainTarget', 1, 2, 1).target).toBe(1);
+    // brightness scaling still applies on top
+    expect(makeGoal('scoreInTime', 1, 0, 2).target).toBeGreaterThan(360);
   });
 });
 

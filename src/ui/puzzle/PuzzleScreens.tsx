@@ -10,6 +10,7 @@ import type { CoachTarget } from '../../game/puzzleState';
 import type { GameActions, GameUiState } from '../../game/state';
 import { t, type TranslationKey } from '../../i18n';
 import { IconBack, IconLock, IconPlay } from '../icons';
+import { hudRect, hudStyle } from '../hudBox';
 
 interface Props {
   state: GameUiState;
@@ -240,12 +241,7 @@ function goalLabel(state: GameUiState): string {
 export function PuzzleHud({ state, actions }: { state: GameUiState; actions: GameActions }) {
   const p = state.puzzle;
   const left = Math.max(0, p.moveBudget - p.movesUsed);
-  const style = {
-    top: `${state.hudTop}px`,
-    height: `${state.hudHeight}px`,
-    left: `${state.boardLeft}px`,
-    width: `${state.boardWidth}px`,
-  };
+  const style = hudStyle(state);
   return (
     <div class={`hud pz-hud accent-${packAccent(p.pack)}`} style={style} data-testid="puzzle-hud">
       <div class="pz-hud-top">
@@ -324,10 +320,12 @@ function CtrlIcon({ name }: { name: 'undo' | 'restart' | 'hint' }) {
 
 export function PuzzleControls({ state, actions }: { state: GameUiState; actions: GameActions }) {
   const p = state.puzzle;
-  const width = Math.min(state.boardWidth, 320);
+  // As wide as the HUD band (up to 340 px): long labels ("Visszavonás") keep their room.
+  const band = hudRect(state, window.innerWidth || 2 * state.boardLeft + state.boardWidth);
+  const width = Math.min(band.width, 340);
   const style = {
     top: `${state.controlsTop}px`,
-    left: `${state.boardLeft + (state.boardWidth - width) / 2}px`,
+    left: `${band.left + (band.width - width) / 2}px`,
     width: `${width}px`,
   };
   const playing = p.status === 'playing';

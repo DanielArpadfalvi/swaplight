@@ -99,9 +99,13 @@ test('versus: select → play vs CPU → garbage both ways → win → rematch �
   await page.getByTestId('mode-versus').click();
   await expect(page.getByTestId('versus-setup')).toBeVisible();
   await expect(page.getByTestId('vs-level-1')).toHaveAttribute('aria-checked', 'true');
-  // Hard needs the Full Version: explained, selection unchanged.
+  // Hard needs the Full Version: the paywall opens, selection unchanged.
   await page.getByTestId('vs-level-3').click();
-  await expect(page.getByTestId('toast')).toBeVisible();
+  await expect(page.getByTestId('paywall')).toBeVisible();
+  await expect(page.getByTestId('paywall-reason')).toContainText('difficulty');
+  await page.evaluate(() => window.__swaplight!.back());
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
+  await expect(page.getByTestId('versus-setup')).toBeVisible();
   await expect(page.getByTestId('vs-level-1')).toHaveAttribute('aria-checked', 'true');
   await page.getByTestId('vs-level-2').click();
   await expect(page.getByTestId('vs-level-2')).toHaveAttribute('aria-checked', 'true');
@@ -234,9 +238,24 @@ test('versus: best of 3 rounds (HU), full version unlocks Hard+', async ({ page 
   await page.evaluate(() => window.__swaplight!.versus!.forceWin());
   await expect(page.getByTestId('vs-next-round')).toBeVisible();
   await shot(page, 'versus-round-hu', 900);
+  // Leaving between rounds of an undecided match asks first (it would forfeit).
+  await page.getByTestId('vs-menu').click();
+  await expect(page.getByTestId('leave-confirm')).toBeVisible();
+  await page.getByTestId('leave-stay').click();
+  await expect(page.getByTestId('leave-confirm')).toBeHidden();
+  expect((await state(page)).screen).toBe('versusResult');
   await page.getByTestId('vs-next-round').click();
   await expect(page.getByTestId('versus-hud')).toBeVisible();
   expect(await vs(page)).toMatchObject({ round: 2, wins: [1, 0], matchOver: false });
+  // Pause → quit to menu mid-match: confirmation; back closes it and keeps the match paused.
+  await page.keyboard.press('Escape');
+  await page.getByTestId('quit-to-menu').click();
+  await expect(page.getByTestId('leave-confirm')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('leave-confirm')).toBeHidden();
+  expect((await state(page)).screen).toBe('paused');
+  await page.keyboard.press('Escape');
+  expect((await state(page)).screen).toBe('playing');
   await step(page, 20);
   await page.evaluate(() => window.__swaplight!.versus!.forceWin());
   await expect(page.getByTestId('vs-rematch')).toBeVisible();

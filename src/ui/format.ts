@@ -19,3 +19,21 @@ export function formatPlayTime(totalSeconds: number): string {
   const sec = s % 60;
   return t('stats.durationMinutes', { m: String(m), s: (sec < 10 ? '0' : '') + sec });
 }
+
+/**
+ * Like {@link useFormat}, but values of a million and more are shortened ("1.2M" / "1,2 M"), for
+ * tight HUD stats.
+ */
+export function useCompactFormat(): (n: number) => string {
+  const lang = getLanguage();
+  return useMemo(() => formatCompact(lang), [lang]);
+}
+
+export function formatCompact(lang: string): (n: number) => string {
+  const full = new Intl.NumberFormat(lang);
+  const compact = new Intl.NumberFormat(lang, {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  });
+  return (n: number) => (Math.abs(n) >= 1_000_000 ? compact.format(n) : full.format(n));
+}

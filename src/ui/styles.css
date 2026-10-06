@@ -62,7 +62,7 @@ body {
   left: 50%;
   bottom: calc(18px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--neon-cyan);
@@ -91,9 +91,10 @@ button {
   gap: 6px;
 }
 
+/* Label above the value; a stat never shrinks below its value (values are never truncated). */
 .stat {
   flex: 1 1 0;
-  min-width: 0;
+  min-width: max-content;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -110,7 +111,7 @@ button {
 }
 
 .stat-label {
-  font-size: 9px;
+  font-size: calc(9px * var(--fs, 1));
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -119,14 +120,15 @@ button {
 }
 
 .stat-value {
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--text);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
+}
+
+.stat-level {
+  flex-grow: 0.8;
 }
 
 .stat-best .stat-value {
@@ -166,7 +168,7 @@ button {
 }
 
 .score-label {
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   font-weight: 700;
   letter-spacing: 0.32em;
   text-transform: uppercase;
@@ -185,6 +187,10 @@ button {
     0 0 2px #fff,
     0 0 12px rgba(30, 200, 255, 0.9),
     0 0 28px rgba(30, 200, 255, 0.45);
+}
+
+.score-long {
+  font-size: clamp(28px, 9vw, 42px);
 }
 
 .hud-danger .score-value {
@@ -211,7 +217,7 @@ button {
   min-width: 40px;
   padding: 3px 10px;
   border-radius: 8px;
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   text-align: center;
@@ -242,13 +248,13 @@ button {
 
 .chip-x,
 .chip-eq {
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   font-weight: 900;
   color: var(--text-dim);
 }
 
 .chip-total {
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   color: var(--gold);
@@ -301,6 +307,38 @@ button {
 .overlay-dim {
   background: radial-gradient(ellipse at 50% 45%, rgba(10, 6, 26, 0.55), rgba(4, 3, 11, 0.86));
   animation: fade-in 0.25s ease-out;
+}
+
+/* Pause: the board behind is dimmed and blurred in every mode. */
+.pause-overlay {
+  background: radial-gradient(ellipse at 50% 45%, rgba(10, 6, 26, 0.68), rgba(4, 3, 11, 0.9));
+  -webkit-backdrop-filter: blur(6px) saturate(0.7);
+  backdrop-filter: blur(6px) saturate(0.7);
+}
+
+/*
+ * Small controls whose look must stay: an invisible ::after extends the hit area to at least
+ * 44 × 44 px (it only grows the box, never shrinks it).
+ */
+.hit-44,
+.run-relic-slot,
+.owned-relic,
+.owned-charm,
+.tut-skip {
+  position: relative;
+}
+
+.hit-44::after,
+.run-relic-slot::after,
+.owned-relic::after,
+.owned-charm::after,
+.tut-skip::after {
+  content: '';
+  position: absolute;
+  top: min(0px, calc((100% - 44px) / 2));
+  bottom: min(0px, calc((100% - 44px) / 2));
+  left: min(0px, calc((100% - 44px) / 2));
+  right: min(0px, calc((100% - 44px) / 2));
 }
 
 @keyframes fade-in {
@@ -356,7 +394,7 @@ button {
 
 .tagline {
   margin: 14px 0 0;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   font-weight: 700;
   letter-spacing: 0.34em;
   text-transform: uppercase;
@@ -373,7 +411,7 @@ button {
   min-height: 54px;
   padding: 0 24px;
   border-radius: 999px;
-  font-size: 18px;
+  font-size: calc(18px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.12em;
@@ -419,7 +457,7 @@ button {
   color: var(--text);
   background: rgba(20, 14, 44, 0.6);
   border: 1px solid rgba(154, 148, 196, 0.45);
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   min-height: 48px;
 }
 
@@ -477,7 +515,7 @@ button {
 }
 
 .final-label {
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   font-weight: 700;
   letter-spacing: 0.3em;
   text-transform: uppercase;
@@ -499,7 +537,7 @@ button {
   margin-top: 4px;
   padding: 4px 12px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   font-weight: 900;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -582,7 +620,7 @@ button {
 
 .menu-head .tagline {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: calc(11px * var(--fs, 1));
 }
 
 .mode-list {
@@ -788,7 +826,7 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 17px;
+  font-size: calc(17px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.07em;
@@ -798,13 +836,15 @@ button {
 }
 
 .mode-desc {
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   line-height: 1.3;
   color: var(--text-dim);
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  hyphens: auto;
 }
 
 .mode-side {
@@ -835,7 +875,7 @@ button {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   color: var(--gold);
@@ -844,7 +884,7 @@ button {
 }
 
 .mode-best-label {
-  font-size: 8px;
+  font-size: calc(8px * var(--fs, 1));
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--text-dim);
@@ -857,7 +897,7 @@ button {
   gap: 4px;
   padding: 3px 8px;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: calc(9px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -868,6 +908,17 @@ button {
   color: #cfc9ef;
   background: rgba(154, 148, 196, 0.12);
   border: 1px solid rgba(154, 148, 196, 0.35);
+}
+
+/* Narrow phones: the lock badge alone, so the mode name keeps its room. */
+@media (max-width: 400px) {
+  .mode-title-row .pill-lock .pill-text {
+    display: none;
+  }
+
+  .mode-title-row .pill-lock {
+    padding: 4px 6px;
+  }
 }
 
 .pill-lock {
@@ -937,7 +988,7 @@ button {
 }
 
 .bar-label {
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -954,6 +1005,7 @@ button {
 }
 
 .sheet-frame {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   width: min(480px, 100%);
@@ -1001,6 +1053,57 @@ button {
     0 0 24px rgba(30, 200, 255, 0.4);
 }
 
+/* More content below the fold: fade the bottom edge (the chevron sits on top of it). */
+.sheet-body.has-more {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 56px), rgba(0, 0, 0, 0.15));
+  mask-image: linear-gradient(180deg, #000 calc(100% - 56px), rgba(0, 0, 0, 0.15));
+}
+
+.scroll-more {
+  position: absolute;
+  left: 50%;
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  margin-left: -15px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--neon-cyan);
+  background: rgba(12, 8, 30, 0.85);
+  border: 1px solid rgba(30, 200, 255, 0.55);
+  box-shadow: 0 0 12px rgba(30, 200, 255, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.scroll-more svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.scroll-more.is-on {
+  opacity: 1;
+  animation: more-bob 1.4s ease-in-out infinite;
+}
+
+/* Above a sheet footer (Run map, shop, setup screens). */
+.run-foot .scroll-more {
+  bottom: auto;
+  top: -36px;
+}
+
+@keyframes more-bob {
+  50% {
+    transform: translateY(4px);
+  }
+}
+
 .sheet-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -1034,7 +1137,7 @@ button {
 
 .section-title {
   margin: 0 4px;
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.26em;
   text-transform: uppercase;
@@ -1100,19 +1203,19 @@ button {
 }
 
 .row-label {
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   font-weight: 700;
   color: var(--text);
 }
 
 .row-hint {
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   line-height: 1.3;
   color: var(--text-dim);
 }
 
 .row-value {
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--neon-cyan);
@@ -1191,8 +1294,9 @@ button {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 28px;
-  margin: 0;
+  /* 44 px touch target; the negative margin keeps the row as compact as the 6 px track. */
+  height: 44px;
+  margin: -8px 0;
   background: transparent;
   touch-action: pan-x;
   cursor: pointer;
@@ -1259,12 +1363,12 @@ button {
 }
 
 .seg {
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 6px;
   border: 0;
   border-radius: 10px;
   font-family: inherit;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   font-weight: 800;
   color: var(--text-dim);
   background: transparent;
@@ -1285,7 +1389,7 @@ button {
 
 .btn-small {
   min-height: 44px;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
 }
 
 .btn:disabled {
@@ -1330,7 +1434,7 @@ button {
 }
 
 .stat-hero-label {
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.3em;
   text-transform: uppercase;
@@ -1351,7 +1455,7 @@ button {
 
 .stat-hero-hint {
   margin-top: 4px;
-  font-size: 12px;
+  font-size: calc(12px * var(--fs, 1));
   color: var(--text-dim);
   text-align: center;
 }
@@ -1429,7 +1533,7 @@ button {
 
 .empty-title {
   margin: 8px 0 0;
-  font-size: 18px;
+  font-size: calc(18px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.06em;
@@ -1440,8 +1544,282 @@ button {
 .empty-body {
   margin: 0;
   max-width: 300px;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   line-height: 1.45;
+  color: var(--text-dim);
+}
+
+/* ---------------------------------------------------------------- collection */
+
+.col-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: rise-in 0.36s cubic-bezier(0.2, 1.1, 0.4, 1) both;
+}
+
+.col-summary-text {
+  font-size: calc(12px * var(--fs, 1));
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.col-meter {
+  height: 6px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgba(154, 148, 196, 0.16);
+}
+
+.col-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #1ec8ff, #7a5cff 60%, #ff4fbf);
+  box-shadow: 0 0 10px rgba(30, 200, 255, 0.7);
+}
+
+.col-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(4, 3, 11, 0.55);
+  border: 1px solid rgba(122, 60, 255, 0.3);
+}
+
+.col-tab {
+  min-width: 0;
+  min-height: 48px;
+  padding: 4px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border: 0;
+  border-radius: 10px;
+  font-family: inherit;
+  color: var(--text-dim);
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+.col-tab-label {
+  max-width: 100%;
+  font-size: calc(11px * var(--fs, 1));
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  line-height: 1.1;
+}
+
+.col-tab-count {
+  font-size: calc(12px * var(--fs, 1));
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.col-tab.is-on {
+  color: #fff;
+  background: linear-gradient(90deg, rgba(30, 200, 255, 0.45), rgba(122, 92, 255, 0.55));
+  box-shadow:
+    0 0 12px rgba(30, 200, 255, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.col-tab:focus-visible,
+.col-item:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.col-hint {
+  margin: -6px 0 0;
+  text-align: center;
+  font-size: calc(12px * var(--fs, 1));
+  color: var(--text-dim);
+}
+
+.col-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(122, 60, 255, 0.08);
+  border: 1px solid rgba(122, 60, 255, 0.3);
+}
+
+.col-empty-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: calc(12.5px * var(--fs, 1));
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+
+.col-empty-text strong {
+  font-size: calc(13px * var(--fs, 1));
+  font-style: italic;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #f4fbff;
+}
+
+.col-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+  grid-auto-flow: row dense;
+}
+
+.col-item {
+  --rarity: #9a94c4;
+  position: relative;
+  container-type: inline-size;
+  min-width: 0;
+  min-height: 84px;
+  padding: 8px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  border-radius: 14px;
+  font-family: inherit;
+  color: var(--text);
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  background:
+    radial-gradient(
+      ellipse at 50% 0%,
+      color-mix(in srgb, var(--rarity) 20%, transparent),
+      transparent 65%
+    ),
+    linear-gradient(180deg, rgba(26, 16, 58, 0.9), rgba(12, 8, 30, 0.9));
+  border: 1px solid color-mix(in srgb, var(--rarity) 55%, transparent);
+  transition: transform 0.08s ease-out;
+}
+
+.col-item:active {
+  transform: scale(0.97);
+}
+
+.col-curses .col-item {
+  --rarity: #ff3b55;
+}
+
+.col-decks .col-item {
+  --rarity: #1ec8ff;
+}
+
+.col-icon {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+}
+
+.col-name {
+  max-width: 100%;
+  font-size: min(calc(11px * var(--fs, 1)), calc(100cqi / (var(--word, 8) * 0.78)));
+  font-weight: 900;
+  font-style: italic;
+  line-height: 1.15;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Undiscovered: a dark silhouette and "???". */
+.col-item.is-unseen {
+  border-style: dashed;
+  border-color: rgba(154, 148, 196, 0.3);
+  background: rgba(12, 8, 30, 0.7);
+}
+
+.col-item.is-unseen .col-icon {
+  filter: brightness(0) drop-shadow(0 0 1px rgba(154, 148, 196, 0.7));
+  opacity: 0.55;
+}
+
+.col-item.is-unseen .col-name {
+  color: var(--text-dim);
+  letter-spacing: 0.2em;
+}
+
+.col-decks .col-item.is-unseen .col-icon {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.col-decks .col-item.is-unseen .col-name {
+  letter-spacing: 0.03em;
+}
+
+.col-lock {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #1a1000;
+  background: linear-gradient(135deg, #ffe27a, #ffae00);
+}
+
+.col-deck-icon {
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: radial-gradient(circle at 50% 40%, rgba(30, 200, 255, 0.22), rgba(12, 8, 30, 0.9));
+  border: 1px solid rgba(30, 200, 255, 0.45);
+}
+
+/* Tapped item: spans the row and shows its card. */
+.col-item.is-open {
+  grid-column: 1 / -1;
+  min-height: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  text-align: left;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--rarity) 35%, transparent);
+  animation: chip-pop 0.25s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.col-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.col-detail .col-name {
+  font-size: calc(15px * var(--fs, 1));
+}
+
+.col-desc {
+  font-size: calc(13px * var(--fs, 1));
+  line-height: 1.4;
   color: var(--text-dim);
 }
 
@@ -1471,7 +1849,7 @@ button {
 
 .credits dt {
   margin-top: 14px;
-  font-size: 10px;
+  font-size: calc(10px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.26em;
   text-transform: uppercase;
@@ -1481,14 +1859,14 @@ button {
 .credits dd {
   margin: 0;
   max-width: 320px;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   line-height: 1.45;
   color: var(--text);
 }
 
 .about-thanks {
   margin: 10px 0 0;
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   color: var(--gold);
@@ -1503,7 +1881,7 @@ button {
   margin: 0;
   padding: 14px 16px;
   border-radius: 14px;
-  font-size: 15px;
+  font-size: calc(15px * var(--fs, 1));
   line-height: 1.5;
   color: var(--text);
   background: linear-gradient(180deg, rgba(34, 22, 72, 0.5), rgba(16, 10, 36, 0.5));
@@ -1515,10 +1893,25 @@ button {
   font-style: italic;
 }
 
+.about-link {
+  padding: 8px 18px;
+  font-size: calc(12px * var(--fs, 1));
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-decoration: none;
+  color: var(--neon-cyan);
+  border: 1px solid rgba(30, 200, 255, 0.55);
+  box-shadow: 0 0 12px rgba(30, 200, 255, 0.2);
+}
+
+.about-link svg {
+  flex: 0 0 auto;
+}
+
 .panel-body {
   margin: -4px 0 6px;
   text-align: center;
-  font-size: 14px;
+  font-size: calc(14px * var(--fs, 1));
   color: var(--text-dim);
 }
 
@@ -1528,12 +1921,13 @@ button {
   position: absolute;
   left: 50%;
   bottom: calc(108px + env(safe-area-inset-bottom));
+  width: max-content;
   z-index: 60;
   max-width: calc(100% - 40px);
   transform: translateX(-50%);
   padding: 10px 18px;
   border-radius: 14px;
-  font-size: 13px;
+  font-size: calc(13px * var(--fs, 1));
   font-weight: 700;
   text-align: center;
   color: var(--text);
@@ -1553,6 +1947,19 @@ button {
   }
 }
 
+/* During play: anchored to the HUD band's lower edge (inline `bottom`), above the board. */
+.toast-top {
+  max-width: min(360px, calc(100% - 32px));
+  animation-name: toast-in-top, fade-out;
+}
+
+@keyframes toast-in-top {
+  from {
+    transform: translate(-50%, -14px);
+    opacity: 0;
+  }
+}
+
 /* ---------------------------------------------------------------- raise button */
 
 .raise-btn {
@@ -1565,7 +1972,7 @@ button {
   gap: 10px;
   border-radius: 18px;
   font-family: inherit;
-  font-size: 16px;
+  font-size: calc(16px * var(--fs, 1));
   font-weight: 900;
   font-style: italic;
   letter-spacing: 0.2em;
@@ -1622,6 +2029,25 @@ button {
 
 .high-contrast {
   --text-dim: #d4d0ee;
+}
+
+/*
+ * Larger text: body-size fonts (≤ 18 px) are written as `calc(Npx * var(--fs, 1))`. In-play HUD
+ * bands and controls keep their size (they are laid out to the pixel around the board).
+ */
+.large-text {
+  --fs: 1.15;
+}
+
+.large-text .hud,
+.large-text .tut-band,
+.large-text .run-controls,
+.large-text .pz-controls,
+.large-text .raise-btn,
+.large-text .vs-opp,
+.large-text .vs-warning,
+.large-text .gq {
+  --fs: 1;
 }
 
 .high-contrast .mode-card,

@@ -1,11 +1,14 @@
-import type { Overlay } from '../game/nav';
+import { versusNeedsLeaveConfirm, type Overlay } from '../game/nav';
 import { formatClock, type GameActions, type GameUiState } from '../game/state';
 import type { Store } from '../game/store';
 import { t } from '../i18n';
-import { useFormat } from './format';
+import { useEffect } from 'preact/hooks';
+import { useCompactFormat, useFormat } from './format';
+import { hudStyle } from './hudBox';
 import { IconPlay, IconSettings } from './icons';
 import { CollectionScreen, CreditsScreen, ExitDialog, PrivacyScreen } from './InfoScreens';
 import { MainMenu } from './Menu';
+import { PaywallScreen } from './Paywall';
 import { Presence } from './Presence';
 import { SettingsScreen } from './Settings';
 import { StatsScreen } from './Stats';
@@ -22,7 +25,12 @@ import {
 } from './run/RunScreens';
 import { ShopScreen } from './run/Shop';
 import { DailyHud, DailyIntro, DailyResultScreen } from './modes/DailyScreens';
-import { VersusHud, VersusResultScreen, VersusSetupScreen } from './modes/VersusScreens';
+import {
+  LeaveMatchDialog,
+  VersusHud,
+  VersusResultScreen,
+  VersusSetupScreen,
+} from './modes/VersusScreens';
 import './run/run.css';
 import './modes/modes.css';
 import {
@@ -50,6 +58,8 @@ const OVERLAYS: readonly Overlay[] = [
   'privacy',
   'exitConfirm',
   'abandonConfirm',
+  'leaveConfirm',
+  'paywall',
 ];
 
 export function App({ store, actions }: AppProps) {
@@ -77,7 +87,19 @@ export function App({ store, actions }: AppProps) {
     `mode-is-${state.mode}`,
     rm ? 'reduced-motion' : '',
     state.settings.highContrast ? 'high-contrast' : '',
+    state.settings.largeText ? 'large-text' : '',
   ];
+  // The document language drives hyphenation (`hyphens: auto`) and screen readers.
+  useEffect(() => {
+    document.documentElement.lang = state.language;
+  }, [state.language]);
+  // During play toasts rest on the lower edge of the HUD band, just above the board: clear of the
+  // board's rows, the controls below it and the HUD's top row (pause button).
+  const toastStyle: Record<string, string> = {
+    '--toast-hide': `${Math.max(0, (state.toast?.ms ?? 0) - 400)}ms`,
+  };
+  const toastOnTop = inPlay || screen === 'stageIntro' || screen === 'dailyIntro';
+  if (toastOnTop) toastStyle.bottom = `calc(100% - ${state.hudTop + state.hudHeight - 2}px)`;
   return (
     <div class={classes.filter(Boolean).join(' ')} lang={state.language}>
       <Presence when={screen === 'menu'} ms={ms}>
@@ -105,6 +127,7 @@ export function App({ store, actions }: AppProps) {
           <PausePanel
             run={run}
             puzzle={state.mode === 'puzzle'}
+            confirmLeave={versusNeedsLeaveConfirm(state)}
             actions={actions}
             leaving={leaving}
           />
@@ -166,11 +189,11 @@ export function App({ store, actions }: AppProps) {
       })}
       {state.toast && (
         <div
-          class="toast"
+          class={`toast${toastOnTop ? ' toast-top' : ''}`}
           key={state.toast.key}
           role="status"
           data-testid="toast"
-          style={{ '--toast-hide': `${Math.max(0, state.toast.ms - 400)}ms` }}
+          style={toastStyle}
         >
           {state.toast.text}
         </div>
@@ -193,7 +216,7 @@ function renderOverlay(
     case 'stats':
       return <StatsScreen state={state} {...props} />;
     case 'collection':
-      return <CollectionScreen {...props} />;
+      return <CollectionScreen state={state} {...props} />;
     case 'credits':
       return <CreditsScreen {...props} />;
     case 'privacy':
@@ -202,29 +225,33 @@ function renderOverlay(
       return <ExitDialog {...props} />;
     case 'abandonConfirm':
       return <AbandonDialog {...props} />;
+    case 'leaveConfirm':
+      return <LeaveMatchDialog {...props} />;
+    case 'paywall':
+      return <PaywallScreen state={state} {...props} />;
   }
 }
 
 function Hud({ state, actions }: { state: GameUiState; actions: GameActions }) {
   const fmt = useFormat();
+  const compact = useCompactFormat();
   const score = useCountUp(state.score);
   const flash = state.scoreFlash;
-  const style = {
-    top: `${state.hudTop}px`,
-    height: `${state.hudHeight}px`,
-    left: `${state.boardLeft}px`,
-    width: `${state.boardWidth}px`,
-  };
+  const scoreText = fmt(score);
   return (
-    <div class={`hud${state.danger ? ' hud-danger' : ''}`} style={style} data-testid="hud">
+    <div
+      class={`hud${state.danger ? ' hud-danger' : ''}`}
+      style={hudStyle(state)}
+      data-testid="hud"
+    >
       <div class="hud-top">
-        <div class="stat">
+        <div class="stat stat-level">
           <span class="stat-label">{t('hud.level')}</span>
           <span class="stat-value" data-testid="hud-level">
             {state.level}
           </span>
         </div>
-        <div class="stat">
+        <div class="stat stat-time">
           <span class="stat-label">{t('hud.time')}</span>
           <span class="stat-value" data-testid="hud-time">
             {formatClock(state.seconds)}
@@ -233,7 +260,7 @@ function Hud({ state, actions }: { state: GameUiState; actions: GameActions }) {
         <div class="stat stat-best">
           <span class="stat-label">{t('hud.best')}</span>
           <span class="stat-value" data-testid="hud-best">
-            {fmt(Math.max(state.best, state.score))}
+            {compact(Math.max(state.best, state.score))}
           </span>
         </div>
         <button
@@ -251,20 +278,23 @@ function Hud({ state, actions }: { state: GameUiState; actions: GameActions }) {
       </div>
       <div class="hud-score">
         <span class="score-label">{t('hud.score')}</span>
-        <span class="score-value" data-testid="hud-score">
-          {fmt(score)}
+        <span
+          class={`score-value${scoreText.length > 9 ? ' score-long' : ''}`}
+          data-testid="hud-score"
+        >
+          {scoreText}
         </span>
       </div>
       <div class="chips" aria-hidden={flash ? 'false' : 'true'}>
         {flash && (
           <div class="chips-row" key={flash.key} data-testid="score-chips">
-            <span class="chip chip-base">{fmt(flash.base)}</span>
+            <span class="chip chip-base">{compact(flash.base)}</span>
             <span class="chip-x">×</span>
             <span class={`chip chip-mult${flash.mult > 1 ? ' chip-hot' : ''}`}>
-              {fmt(flash.mult)}
+              {compact(flash.mult)}
             </span>
             <span class="chip-eq">=</span>
-            <span class="chip-total">{fmt(flash.total)}</span>
+            <span class="chip-total">{compact(flash.total)}</span>
           </div>
         )}
       </div>
@@ -312,17 +342,20 @@ function RaiseButton({ state, actions }: { state: GameUiState; actions: GameActi
 function PausePanel({
   run,
   puzzle,
+  confirmLeave,
   actions,
   leaving,
 }: {
   run: boolean;
   puzzle: boolean;
+  /** Quitting forfeits a Versus match: ask first. */
+  confirmLeave: boolean;
   actions: GameActions;
   leaving: boolean;
 }) {
   return (
     <div
-      class={`overlay overlay-dim${leaving ? ' is-leaving' : ''}`}
+      class={`overlay overlay-dim pause-overlay${leaving ? ' is-leaving' : ''}`}
       data-testid="pause-panel"
       role="dialog"
       aria-modal="true"
@@ -362,7 +395,7 @@ function PausePanel({
           type="button"
           class="btn btn-ghost btn-quiet"
           data-testid="quit-to-menu"
-          onClick={() => actions.menu()}
+          onClick={() => (confirmLeave ? actions.openOverlay('leaveConfirm') : actions.menu())}
         >
           {t('common.quitToMenu')}
         </button>

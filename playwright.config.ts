@@ -21,6 +21,8 @@ const executablePath = resolveChromiumExecutable();
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  // Store screenshots run separately (`npm run store:screens`, playwright.store.config.ts).
+  testIgnore: 'store-screens.spec.ts',
   outputDir: 'test-results',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,

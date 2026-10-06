@@ -61,9 +61,11 @@ test('run: deck select → map → intro → play → reward → shop → next s
   await page.getByTestId('mode-run').click();
   await expect(page.getByTestId('run-setup')).toBeVisible();
   await expect(page.getByTestId('deck-neon')).toHaveAttribute('aria-pressed', 'true');
-  // Locked deck (free version) explains itself and stays unselected.
+  // Locked deck (free version) opens the Full Version sheet and stays unselected.
   await page.getByTestId('deck-prism').click();
-  await expect(page.getByTestId('toast')).toBeVisible();
+  await expect(page.getByTestId('paywall')).toBeVisible();
+  await page.getByTestId('paywall-not-now').click();
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
   await expect(page.getByTestId('deck-neon')).toHaveAttribute('aria-pressed', 'true');
   await shot(page, 'run-setup');
 
@@ -142,6 +144,13 @@ test('run: deck select → map → intro → play → reward → shop → next s
   await page.getByTestId('run-play-stage').click();
   await page.getByTestId('stage-start').click();
   await page.evaluate(() => window.__swaplight!.stepTicks(30));
+
+  // Back (Escape) with the charm card open closes the card – it does not pause.
+  await page.getByTestId('hud-charm-0').click();
+  await expect(page.getByTestId('charm-card')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('charm-card')).toBeHidden();
+  expect((await page.evaluate(() => window.__swaplight!.getState())).screen).toBe('playing');
 
   // Untargeted charm: open its card, use it.
   await page.getByTestId('hud-charm-0').click();

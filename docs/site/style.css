@@ -1,0 +1,220 @@
+:root {
+  --bg: #07061a;
+  --panel: rgba(255, 255, 255, 0.04);
+  --line: rgba(160, 140, 255, 0.22);
+  --text: #ece9ff;
+  --muted: #a9a3cf;
+  --cyan: #4fe6ff;
+  --pink: #ff4fb8;
+  --gold: #ffd36e;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  background: var(--bg);
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font:
+    16px/1.6 'Inter',
+    'Avenir Next',
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background:
+    radial-gradient(ellipse 70vw 50vh at 10% 0%, rgba(255, 79, 184, 0.18), transparent 70%),
+    radial-gradient(ellipse 70vw 60vh at 95% 40%, rgba(123, 92, 255, 0.18), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
+}
+a {
+  color: var(--cyan);
+}
+a:hover {
+  color: #9ff3ff;
+}
+.wrap {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+header.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.brand img {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+.langs button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.langs button[aria-pressed='true'] {
+  color: var(--bg);
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+h1 {
+  font-size: clamp(30px, 7vw, 44px);
+  line-height: 1.1;
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+}
+h1 .glow {
+  color: var(--cyan);
+  text-shadow:
+    0 0 18px rgba(79, 230, 255, 0.7),
+    0 0 40px rgba(255, 79, 184, 0.45);
+}
+h2 {
+  font-size: 20px;
+  margin: 36px 0 8px;
+  color: #fff;
+}
+h3 {
+  font-size: 17px;
+  margin: 24px 0 4px;
+}
+p,
+li {
+  color: var(--text);
+}
+.muted {
+  color: var(--muted);
+  font-size: 14px;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px 20px;
+  margin: 16px 0;
+}
+.hero {
+  text-align: center;
+  padding: 24px 0 8px;
+}
+.hero img.icon {
+  width: 128px;
+  height: 128px;
+  border-radius: 28px;
+  box-shadow:
+    0 0 40px rgba(79, 230, 255, 0.35),
+    0 0 80px rgba(255, 79, 184, 0.25);
+}
+.tagline {
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 24px 0;
+}
+.badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 180px;
+  padding: 10px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: #000;
+  color: #fff;
+  text-decoration: none;
+  line-height: 1.2;
+}
+.badge small {
+  font-size: 11px;
+  color: #ccc;
+}
+.badge strong {
+  font-size: 19px;
+}
+.badge[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: default;
+}
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin: 24px 0;
+}
+.features .card {
+  margin: 0;
+}
+.features h3 {
+  margin-top: 0;
+  color: var(--gold);
+}
+footer {
+  margin-top: 48px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 14px;
+  color: var(--muted);
+}
+details {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+}
+summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+th,
+td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+/* Language switching: without JS both languages show; with JS only the chosen one. */
+html[data-lang='en'] [lang='hu'],
+html[data-lang='hu'] [lang='en'] {
+  display: none !important;
+}

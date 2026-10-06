@@ -3,7 +3,16 @@ import { versionLabel } from '../core/version';
 import { MODES, modeStatus, type ModeDef } from '../game/modes';
 import type { GameActions, GameUiState } from '../game/state';
 import { t } from '../i18n';
-import { IconCollection, IconLock, IconPlay, IconSettings, IconStats, ModeGlyph } from './icons';
+import {
+  IconChevron,
+  IconCollection,
+  IconLock,
+  IconPlay,
+  IconSettings,
+  IconStats,
+  ModeGlyph,
+} from './icons';
+import { PaywallEmblem } from './Paywall';
 import { useFormat } from './format';
 import { DailyCardInfo } from './modes/DailyScreens';
 
@@ -33,6 +42,7 @@ export function MainMenu({ state, actions, leaving }: MenuProps) {
         ))}
       </nav>
       <footer class="menu-foot">
+        {!state.fullVersion && <FullVersionBanner state={state} actions={actions} />}
         <div class="menu-bar">
           <BarButton
             label={t('menu.stats')}
@@ -99,9 +109,9 @@ function ModeCard({
           <span class="mode-name">{t(mode.titleKey)}</span>
           {status === 'soon' && <span class="pill pill-soon">{t('menu.comingSoon')}</span>}
           {status === 'locked' && (
-            <span class="pill pill-lock">
+            <span class="pill pill-lock" title={t('menu.fullVersion')}>
               <IconLock size={11} />
-              {t('menu.fullVersion')}
+              <span class="pill-text">{t('menu.fullVersion')}</span>
             </span>
           )}
         </span>
@@ -143,6 +153,28 @@ function TutorialBanner({ actions }: { actions: GameActions }) {
       </span>
       <span class="mode-go">
         <IconPlay size={14} />
+      </span>
+    </button>
+  );
+}
+
+/** Subtle Full Version strip above the menu bar (free version only). */
+function FullVersionBanner({ state, actions }: { state: GameUiState; actions: GameActions }) {
+  const price = state.paywall.price;
+  return (
+    <button
+      type="button"
+      class="paywall-banner"
+      data-testid="paywall-banner"
+      onClick={() => actions.openPaywall('menu')}
+    >
+      <PaywallEmblem />
+      <span class="paywall-banner-text">
+        <strong>{t('paywall.bannerTitle')}</strong>
+        <span>{price ? t('paywall.bannerBody', { price }) : t('paywall.bannerBodyNoPrice')}</span>
+      </span>
+      <span class="paywall-banner-go">
+        <IconChevron />
       </span>
     </button>
   );

@@ -92,6 +92,9 @@ test('tutorial: banner → every step completed with scripted swaps → done fla
   await expect(page.getByTestId('tutorial-card')).toBeVisible();
   await shot(page, 'tutorial-7-relics', 900);
   await page.getByTestId('tutorial-finish').click();
+  // "Let's play!" leads straight into the Run setup; back returns to the menu.
+  await expect(page.getByTestId('run-setup')).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.getByTestId('start-screen')).toBeVisible();
   await expect(page.getByTestId('tutorial-banner')).toHaveCount(0);
   expect((await saveData(page)).tutorialDone).toBe(true);

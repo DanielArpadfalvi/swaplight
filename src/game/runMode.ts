@@ -20,7 +20,6 @@ import {
   brightnessUnlockKey,
   deckAvailable,
   sanitizeRunChoice,
-  unlocksForWin,
 } from './runUnlocks';
 import type { SaveManager } from './save';
 import type { EndlessSession } from './session';
@@ -42,6 +41,8 @@ export interface RunModeHost {
   /** Test hooks froze real-time stepping. */
   isFrozen(): boolean;
   showToast(text: string): void;
+  /** Open the Full Version sheet (locked deck / Brightness level); falls back to a toast. */
+  openPaywall?(reason: 'decks' | 'brightness'): void;
   /** Switch the board layout (the Run HUD is taller). */
   setLayoutMode(mode: 'endless' | 'run'): void;
   geometry(): BoardGeometry | null;
@@ -135,6 +136,17 @@ export function createRunMode(host: RunModeHost): RunMode {
 
   const persist = (): void => {
     if (!ctrl) return;
+    if (ctrl.ended) {
+      // Lost / won but the end animation or result screen is still up: record it now, so an
+      // app close (pagehide / pause) cannot lose the run from the stats.
+      const c = ctrl;
+      save.update((d) => {
+        c.recordFinished(d);
+      });
+      syncSaved();
+      void save.flush();
+      return;
+    }
     const blob: RunBlob = ctrl.toBlob();
     const json = JSON.parse(JSON.stringify(blob)) as JsonValue;
     save.update((d) => {
@@ -321,18 +333,10 @@ export function createRunMode(host: RunModeHost): RunMode {
     const r = c.run;
     const won = r.phase === 'won';
     const last = c.last;
-    const unlocked = won ? unlocksForWin(r.brightness, save.data.unlocks) : [];
     save.update((d) => {
-      recordGame(d, 'run', {
-        score: r.stats.totalScore,
-        maxChain: r.stats.maxChain,
-        maxCombo: r.stats.maxCombo,
-        blocksCleared: r.stats.blocksCleared,
-        seconds: Math.floor(c.playTicks / TICKS_PER_SECOND),
-      });
-      for (const key of unlocked) if (!d.unlocks.includes(key)) d.unlocks.push(key);
-      d.runInProgress = null;
+      c.recordFinished(d);
     });
+    const unlocked = c.unlocked;
     const summary: RunEndSummary = {
       won,
       act: last?.plan.act ?? r.act,
@@ -372,16 +376,14 @@ export function createRunMode(host: RunModeHost): RunMode {
     store.set({ raiseHeld: false, charmMenu: null, targeting: null, runFinished: fin });
     publishRun();
     window.clearTimeout(endTimer);
+    // Save right away: the next stage / shop, or – when the run is over (lost or the act-3 boss
+    // fell) – record it in the stats now, before the end animation and result screen.
+    persist();
     if (fin.won) {
       audio.stageClear();
       haptics.notify('success');
       scene.flash('chain');
       scene.excite(1);
-      if (fin.victory) {
-        // Keep the run alive for the result screen; the summary records it.
-      } else {
-        persist();
-      }
       endTimer = window.setTimeout(() => {
         if (store.get().runFinished === fin) store.set({ screen: 'stageResult' });
       }, STAGE_END_DELAY_MS);
@@ -503,6 +505,10 @@ export function createRunMode(host: RunModeHost): RunMode {
     selectDeck(id) {
       audio.uiTap();
       if (!deckAvailable(id, store.get().fullVersion)) {
+        if (host.openPaywall) {
+          host.openPaywall('decks');
+          return;
+        }
         haptics.notify('warning');
         host.showToast(t('run.deckNeedsFull'));
         return;
@@ -514,6 +520,10 @@ export function createRunMode(host: RunModeHost): RunMode {
       audio.uiTap();
       const full = store.get().fullVersion;
       if (!brightnessAvailable(level, save.data.unlocks, full)) {
+        if (!full && host.openPaywall) {
+          host.openPaywall('brightness');
+          return;
+        }
         haptics.notify('warning');
         const earned = save.data.unlocks.includes(brightnessUnlockKey(level));
         host.showToast(

@@ -70,6 +70,13 @@ export function SettingsScreen({ state, actions, leaving, z }: Props) {
           value={s.highContrast}
           onChange={(v) => set({ highContrast: v })}
         />
+        <ToggleRow
+          id="large-text"
+          label={t('settings.largeText')}
+          hint={t('settings.largeTextHint')}
+          value={s.largeText}
+          onChange={(v) => set({ largeText: v })}
+        />
       </Section>
 
       <Section title={t('settings.sectionLanguage')}>
@@ -108,6 +115,18 @@ export function SettingsScreen({ state, actions, leaving, z }: Props) {
           </span>
           <span class={`dot${state.fullVersion ? ' dot-on' : ''}`} aria-hidden="true" />
         </div>
+        {!state.fullVersion && (
+          <div class="row row-stack">
+            <button
+              type="button"
+              class="btn btn-primary btn-small"
+              data-testid="settings-unlock"
+              onClick={() => actions.openPaywall('settings')}
+            >
+              {t('paywall.settingsUnlock')}
+            </button>
+          </div>
+        )}
         <div class="row row-stack">
           <button
             type="button"

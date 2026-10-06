@@ -31,6 +31,7 @@ A technikai részt (iOS build macOS-es GitHub Actions runneren, aláírási pipe
 - Az Apple által aktuálisan megkövetelt Xcode/SDK verziót a CI runner biztosítja.
 
 ## 6. App adatlap
+> Elkészült anyagok: szövegek `store/listing/`, screenshotok `store/screenshots/`, kérdőív-válaszok `docs/store-privacy-answers.md`, adatvédelmi/támogatási oldal `docs/site/` – lásd `docs/RELEASE.md` 6. fejezet.
 - [ ] Adatvédelmi nyilatkozat URL (elkészítem, GitHub Pages-en hosztolható).
 - [ ] **App Privacy** kérdőív: „Data Not Collected”, mert a játék offline. A válaszokat előkészítem.
 - [ ] Korhatár-kérdőív (Age Rating): a válaszokat előkészítem, várhatóan a legalacsonyabb besorolást kapja.
@@ -45,6 +46,7 @@ A technikai részt (iOS build macOS-es GitHub Actions runneren, aláírási pipe
 - [ ] Non-consumable termék létrehozása: „Teljes verzió”, kb. 4,99 USD. Kell hozzá egy review-screenshot a vásárlási képernyőről, ezt elkészítem.
 - [ ] Az első IAP-t **az app első verziójával együtt** kell beküldeni review-ra.
 - [ ] RevenueCat összekötése az App Store-ral: az In-App Purchase kulcs (.p8) feltöltése a RevenueCatbe.
+- [ ] RevenueCat termék + `full_version` entitlement + offering, és a `VITE_RC_API_KEY_IOS` GitHub secret – lépésenként: `RELEASE.md` 5. fejezet.
 - A játékban lesz „Vásárlások visszaállítása” gomb, ezt az Apple megköveteli.
 
 ## 9. Tesztelés és kiadás

@@ -54,10 +54,13 @@ test('menu → settings persist across reload → endless → pause → quit to 
   expect((await page.evaluate(() => window.__swaplight!.getRenderInfo())).boardVisible).toBe(false);
   await shot(page, 'menu');
 
-  // A locked mode explains itself instead of starting.
+  // A locked mode opens the Full Version sheet instead of starting.
   await page.getByTestId('mode-daily').click();
-  await expect(page.getByTestId('toast')).toBeVisible();
+  await expect(page.getByTestId('paywall')).toBeVisible();
+  await expect(page.getByTestId('paywall-reason')).toContainText('Daily Challenge');
   expect((await state(page)).screen).toBe('menu');
+  await page.evaluate(() => window.__swaplight!.back());
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
 
   // Settings: change a few values.
   await page.getByTestId('open-settings').click();
@@ -65,6 +68,8 @@ test('menu → settings persist across reload → endless → pause → quit to 
   await page.getByTestId('toggle-reduced-motion').click();
   await page.getByTestId('toggle-high-contrast').click();
   await page.getByTestId('toggle-breakdown').click();
+  await page.getByTestId('toggle-large-text').click();
+  await expect(page.locator('.ui-root')).toHaveClass(/large-text/);
   await page.getByTestId('volume-music').fill('25');
   await expect(page.getByTestId('toggle-reduced-motion')).toHaveAttribute('aria-checked', 'true');
   const render = await page.evaluate(() => window.__swaplight!.getRenderInfo());
@@ -91,11 +96,15 @@ test('menu → settings persist across reload → endless → pause → quit to 
   expect(saved.settings.reducedMotion).toBe(true);
   expect(saved.settings.highContrast).toBe(true);
   expect(saved.settings.showBreakdown).toBe(false);
+  expect(saved.settings.largeText).toBe(true);
   expect(saved.settings.musicVolume).toBeCloseTo(0.25);
   await page.getByTestId('open-settings').click();
   await expect(page.getByTestId('toggle-reduced-motion')).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByTestId('toggle-high-contrast')).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByTestId('volume-music')).toHaveValue('25');
+  await expect(page.getByTestId('toggle-large-text')).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId('toggle-large-text').click();
+  await expect(page.locator('.ui-root')).not.toHaveClass(/large-text/);
   expect((await page.evaluate(() => window.__swaplight!.getRenderInfo())).palette).toBe(
     'high-contrast',
   );
@@ -110,6 +119,10 @@ test('menu → settings persist across reload → endless → pause → quit to 
   // First Endless start shows the one-time controls hint.
   await expect(page.getByTestId('toast')).toContainText('Hold ▲ to raise');
   expect((await saveData(page)).hintsSeen).toContain('endless.controls');
+  // During play the toast sits above the board (never over its rows or the RAISE button).
+  const toastBox = (await page.getByTestId('toast').boundingBox())!;
+  const boardTop = (await state(page)).layout.originY;
+  expect(toastBox.y + toastBox.height).toBeLessThanOrEqual(boardTop);
 
   // Press-and-hold RAISE lifts the stack much faster than the idle rise.
   const risenBefore = (await state(page)).stats.rowsRisen;
@@ -132,6 +145,8 @@ test('menu → settings persist across reload → endless → pause → quit to 
   expect(s.gameOver).toBe(false);
   await page.getByTestId('pause').click();
   await expect(page.getByTestId('pause-panel')).toBeVisible();
+  // A screen change clears the toast (it never covers the pause panel / game over buttons).
+  await expect(page.getByTestId('toast')).toHaveCount(0);
   await page.getByTestId('pause-settings').click();
   await expect(page.getByTestId('settings')).toBeVisible();
   await page.evaluate(() => window.__swaplight!.back());
@@ -168,6 +183,8 @@ test('language switch to Hungarian translates the menu and persists', async ({ p
 
   await expect(page.getByTestId('mode-endless')).toContainText('Végtelen');
   await expect(page.getByTestId('mode-run')).toContainText('Futam');
+  // The document language follows the UI (hyphenation, screen readers).
+  expect(await page.evaluate(() => document.documentElement.lang)).toBe('hu');
   await expect(page.getByTestId('open-settings')).toContainText('Beállítások');
   await shot(page, 'menu-hu');
 
@@ -202,7 +219,17 @@ test('stats screen shows recorded games', async ({ page }) => {
             blocksCleared: 9876,
             playTime: 15240,
           },
+          tutorial: {
+            played: 1,
+            best: 0,
+            bestChain: 1,
+            bestCombo: 0,
+            blocksCleared: 0,
+            playTime: 0,
+          },
         },
+        puzzles: { 'p1-01': { stars: 3, moves: 2 }, 'p1-02': { stars: 2, moves: 3 } },
+        collectionSeen: ['relic.spark_plug', 'relic.infinity_loop', 'charm.purge', 'boss.surge'],
         fullVersion: false,
       }),
     );
@@ -210,15 +237,28 @@ test('stats screen shows recorded games', async ({ page }) => {
   await boot(page);
   await expect(page.getByTestId('mode-endless')).toContainText('128,450');
   await page.getByTestId('open-stats').click();
-  await expect(page.getByTestId('stat-games')).toHaveText('42');
+  await expect(page.getByTestId('stat-games')).toHaveText('43'); // 42 Endless + 1 Tutorial
   await expect(page.getByTestId('stat-chain')).toHaveText('×7');
   await expect(page.getByTestId('stat-blocks')).toHaveText('9,876');
   await expect(page.getByTestId('best-endless')).toHaveText('128,450');
   await expect(page.getByTestId('best-run')).toHaveText('—');
+  // No Tutorial row; Puzzles show the stars collected instead of a score.
+  await expect(page.getByTestId('best-tutorial')).toHaveCount(0);
+  await expect(page.getByTestId('best-puzzles')).toContainText('5 /');
   await shot(page, 'stats');
   await page.getByTestId('sheet-back').click();
   await page.getByTestId('open-collection').click();
   await expect(page.getByTestId('collection')).toBeVisible();
+  // Real collection: discovered items in full, the rest as "???", counters per tab.
+  await expect(page.getByTestId('collection-count-relics')).toHaveText(/^2\/\d+$/);
+  await expect(page.getByTestId('collection-count-charms')).toHaveText(/^1\/\d+$/);
+  await expect(page.getByTestId('collection-count-curses')).toHaveText(/^1\/\d+$/);
+  await expect(page.getByTestId('collection-item-spark_plug')).toContainText('Spark Plug');
+  await expect(page.getByTestId('collection-item-heavy_hand')).toContainText('???');
+  await page.getByTestId('collection-item-spark_plug').click();
+  await expect(page.getByTestId('collection-detail')).toContainText('+15 base');
+  await page.getByTestId('collection-tab-curses').click();
+  await expect(page.getByTestId('collection-item-surge')).toContainText('Surge');
   await shot(page, 'collection');
   expect(errors).toEqual([]);
 });

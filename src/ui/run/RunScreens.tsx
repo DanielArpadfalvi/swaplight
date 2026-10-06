@@ -33,6 +33,8 @@ import {
   deckName,
   goalText,
 } from './runText';
+import { ScrollMore } from '../ScrollMore';
+import { useScrollMore } from '../useScrollMore';
 
 interface Props {
   state: GameUiState;
@@ -79,13 +81,14 @@ export function SparkPill({ value, testId }: { value: number; testId?: string })
 /* ------------------------------------------------------------------------- deck select */
 
 export function RunSetupScreen({ state, actions, leaving }: Props) {
+  const [bodyRef, more] = useScrollMore<HTMLDivElement>();
   const { deckId, brightness } = state.runSetup;
   const full = state.fullVersion;
   return (
     <div class={`overlay sheet run-sheet${leaving ? ' is-leaving' : ''}`} data-testid="run-setup">
       <div class="sheet-frame">
         <Header title={t('run.newRun')} onBack={() => actions.menu()} />
-        <div class="sheet-body">
+        <div class={`sheet-body${more ? ' has-more' : ''}`} ref={bodyRef}>
           <section class="section">
             <h3 class="section-title">{t('run.chooseDeck')}</h3>
             <div class="deck-grid">
@@ -147,6 +150,7 @@ export function RunSetupScreen({ state, actions, leaving }: Props) {
           </section>
         </div>
         <footer class="run-foot">
+          <ScrollMore show={more} />
           <button
             type="button"
             class="btn btn-primary btn-play"
@@ -170,6 +174,7 @@ function stageGoal(run: RunState, p: PlannedStage) {
 
 export function RunMapScreen({ state, actions, leaving }: Props) {
   const fmt = useFormat();
+  const [bodyRef, more] = useScrollMore<HTMLDivElement>();
   const run = state.run;
   if (!run) return null;
   const index = (run.act - 1) * 4 + run.stage;
@@ -184,7 +189,7 @@ export function RunMapScreen({ state, actions, leaving }: Props) {
           onBack={() => actions.menu()}
           right={<SparkPill value={run.szikra} testId="map-sparks" />}
         />
-        <div class="sheet-body run-map-body">
+        <div class={`sheet-body run-map-body${more ? ' has-more' : ''}`} ref={bodyRef}>
           <div class="run-meta">
             <span class="pill run-meta-pill">
               <DeckGlyph id={run.deckId} size={13} />
@@ -269,6 +274,7 @@ export function RunMapScreen({ state, actions, leaving }: Props) {
           <Loadout state={state} />
         </div>
         <footer class="run-foot">
+          <ScrollMore show={more} />
           <button
             type="button"
             class={`btn btn-primary btn-play${boss ? ' btn-boss' : ''}`}
@@ -567,7 +573,16 @@ export function RunEndScreen({ state, actions, leaving }: Props) {
         {s.unlockedBrightness.map((level) => (
           <div class="unlock-banner" key={level} data-testid="unlock-banner">
             <strong>{t('run.unlockedBrightness', { level })}</strong>
-            {!state.fullVersion && <span>{t('run.unlockNeedsFull')}</span>}
+            {!state.fullVersion && (
+              <button
+                type="button"
+                class="unlock-banner-link"
+                data-testid="unlock-get-full"
+                onClick={() => actions.openPaywall('brightness')}
+              >
+                {t('run.unlockNeedsFull')}
+              </button>
+            )}
           </div>
         ))}
         <button

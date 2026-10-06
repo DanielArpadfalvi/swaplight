@@ -27,7 +27,39 @@ export type Screen =
   | 'puzzleResult';
 
 export type Overlay =
-  'settings' | 'stats' | 'collection' | 'credits' | 'privacy' | 'exitConfirm' | 'abandonConfirm';
+  | 'settings'
+  | 'stats'
+  | 'collection'
+  | 'credits'
+  | 'privacy'
+  | 'exitConfirm'
+  | 'abandonConfirm'
+  | 'leaveConfirm'
+  | 'paywall';
+
+/** The parts of the UI state that decide whether leaving a Versus match needs a confirmation. */
+export interface VersusLeaveInfo {
+  mode: string;
+  screen: Screen;
+  versus: unknown;
+  /** May carry `needsLeaveConfirm` (published by the Versus mode). */
+  versusHud?: object | null;
+  versusResult?: { matchOver: boolean } | null;
+}
+
+/**
+ * Leaving a Versus match before it is decided records a forfeit, so the player confirms first.
+ * Uses the mode's own `versusHud.needsLeaveConfirm` flag when published; otherwise any match in
+ * progress (playing / paused, or between rounds of an undecided match) needs it.
+ */
+export function versusNeedsLeaveConfirm(s: VersusLeaveInfo): boolean {
+  if (s.mode !== 'versus' || !s.versus) return false;
+  if (s.screen === 'versusResult') return s.versusResult ? !s.versusResult.matchOver : false;
+  if (s.screen !== 'playing' && s.screen !== 'paused') return false;
+  const flag = (s.versusHud as { needsLeaveConfirm?: unknown } | null | undefined)
+    ?.needsLeaveConfirm;
+  return typeof flag === 'boolean' ? flag : true;
+}
 
 /** Screens that show the board canvas (the others show only the backdrop). */
 export function showsBoard(screen: Screen): boolean {
@@ -46,6 +78,7 @@ export function showsBoard(screen: Screen): boolean {
 
 export type BackAction =
   | { type: 'closeOverlay' }
+  | { type: 'closeCard' }
   | { type: 'pause' }
   | { type: 'resume' }
   | { type: 'toMenu' }
@@ -55,8 +88,17 @@ export type BackAction =
   | { type: 'confirmExit' }
   | { type: 'none' };
 
-export function backAction(screen: Screen, overlays: readonly Overlay[]): BackAction {
+/**
+ * What back does. `cardOpen`: an in-screen card is open (a Run charm card / charm targeting, a
+ * puzzle hint card) – back closes that card before it would pause or leave the screen.
+ */
+export function backAction(
+  screen: Screen,
+  overlays: readonly Overlay[],
+  cardOpen = false,
+): BackAction {
   if (overlays.length > 0) return { type: 'closeOverlay' };
+  if (cardOpen && (screen === 'playing' || screen === 'shop')) return { type: 'closeCard' };
   switch (screen) {
     case 'playing':
       return { type: 'pause' };

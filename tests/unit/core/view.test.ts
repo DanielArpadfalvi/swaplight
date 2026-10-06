@@ -18,6 +18,17 @@ describe('blockRenderPos', () => {
     });
   });
 
+  it('fills a reused `out` object instead of allocating (same values)', () => {
+    const sim = simFromAscii('RG....');
+    swap(sim, 11, 0);
+    run(sim, 2);
+    const out = blockRenderPos(sim, 66)!;
+    const scratch = { ...out, id: -1, row: -1, col: -1 };
+    expect(blockRenderPos(sim, 67, scratch)).toBe(scratch);
+    expect(scratch).toEqual(blockRenderPos(sim, 67));
+    expect(blockRenderPos(sim, 0, scratch)).toBeNull();
+  });
+
   it('includes the swap offset (continuous towards the destination)', () => {
     const sim = simFromAscii('RG....');
     swap(sim, 11, 0);

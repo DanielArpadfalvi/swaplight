@@ -170,6 +170,11 @@ steps are no-ops. `versusLeader(vs)` judges an unfinished match (net garbage, th
 - **Cancel** (`rules.cancel`, default on): a side's new attacks first eat its own incoming queue
   (front first, whole entries or whole rows of a taller entry); only the rest is sent. Both sides
   cancel against their pre-tick queues before anything is delivered, so A/B order never matters.
+- **Side rules** (`rules.sides[i]`, `VersusSideRules`, default no handicap): `attackPercent`
+  (only that share of the side's garbage is sent – whole slabs are dropped deterministically via an
+  `attackCredit` counter on the side), `attackFromTick` (attacks before that tick are discarded)
+  and `extraDelay` (added to `attackDelay`). Cancelling own incoming garbage is never handicapped.
+  `makeVersusRules(partial)` fills the defaults.
 - **Replays**: `stepVersusRecorded(vs, log, a, b)`, `replayVersus(seed, sideA, sideB, log)`,
   `hashVersus(vs)`.
 
@@ -179,13 +184,20 @@ steps are no-ops. `versusLeader(vs)` judges an unfinished match (net garbage, th
 stepping that sim. Deterministic (own seeded RNG; work is budgeted in units, never wall time), so a
 CPU match replays from the versus input log.
 
-| level      | swaps/s | reaction | drag | 2-move setups | verified | mistakes | skill chains | raise below |
-| ---------- | ------- | -------- | ---- | ------------- | -------- | -------- | ------------ | ----------- |
-| 1 Easy     | 1.5     | 45 t     | 1    | –             | 2        | 30 %     | –            | 4           |
-| 2 Normal   | 2.5     | 28 t     | 2    | –             | 3        | 12 %     | –            | 5           |
-| 3 Hard     | 4       | 16 t     | 3    | 4             | 5        | 3 %      | –            | 6           |
-| 4 Expert   | 6       | 9 t      | 3    | 8             | 6        | –        | yes          | 7           |
-| 5 Insane   | 8       | 4 t      | 4    | 12            | 8        | –        | yes          | 7           |
+| level      | swaps/s | reaction | drag | 2-move setups | verified | mistakes | skill chains | raise below | versus handicap |
+| ---------- | ------- | -------- | ---- | ------------- | -------- | -------- | ------------ | ----------- | --------------- |
+| 1 Easy     | 1.5     | 45 t     | 1    | –             | 2        | 30 %     | –            | 4           | 50 % of its garbage, none in the first 15 s, +1 s arming delay |
+| 2 Normal   | 2.5     | 18 t     | 3    | –             | 3        | 6 %      | –            | 5           | –               |
+| 3 Hard     | 4       | 16 t     | 3    | 4             | 5        | 3 %      | –            | 6           | –               |
+| 4 Expert   | 6       | 9 t      | 3    | 8             | 6        | –        | yes          | 7           | –               |
+| 5 Insane   | 8       | 4 t      | 4    | 12            | 8        | –        | yes          | 7           | –               |
+
+The handicap is `CpuProfile.handicap` → `cpuSideRules(level)`, applied by the game glue as the
+CPU side's `VersusRules.sides[1]`. Swaps/s is the input-speed cap; the effective rate is much
+lower because the CPU waits for a calm board (measured ≈ 0.25 / 0.6 / 1.2 / 1.9 / 2.4 swaps/s).
+Difficulty ladder (`BALANCE=1 npx vitest run tests/unit/core/versusBalance.test.ts`): a scripted
+player making at most one match per 2.5 s beats Easy ≈ 80 %, one per 1.25 s beats Normal
+≈ 55 %, Hard ≈ 5–20 %, Expert ≤ 10 %, Insane 0 %; an idle player loses to Easy in ≈ 45–60 s.
 
 Loop: wait `reactionTicks` → `planSearch` (a generator resumed every tick until its per-tick work
 `budget` is used): (1) every single-block drag of 1..maxDrag swaps is applied to a static color grid

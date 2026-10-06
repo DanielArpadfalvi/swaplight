@@ -8,6 +8,7 @@ import { IconPlay } from '../icons';
 import { useCountUp } from '../useCountUp';
 import { CurseIcon, GoalGlyph } from '../run/runIcons';
 import { clock, curseDesc, curseName } from '../run/runText';
+import { hudStyle } from '../hudBox';
 
 interface Props {
   state: GameUiState;
@@ -142,12 +143,7 @@ export function DailyHud({ state, actions }: { state: GameUiState; actions: Game
   const score = useCountUp(state.score);
   const d = state.daily;
   if (!d) return null;
-  const style = {
-    top: `${state.hudTop}px`,
-    height: `${state.hudHeight}px`,
-    left: `${state.boardLeft}px`,
-    width: `${state.boardWidth}px`,
-  };
+  const style = hudStyle(state);
   const urgent = d.secondsLeft <= 10;
   return (
     <div

@@ -44,6 +44,8 @@ export interface VersusModeHost {
   loop: GameLoop;
   isFrozen(): boolean;
   showToast(text: string): void;
+  /** Open the Full Version sheet (locked CPU level); falls back to a toast. */
+  openPaywall?(reason: 'versus'): void;
   setLayoutMode(mode: 'versus'): void;
   /** Current versus layout (after `setLayoutMode('versus')`). */
   versusLayout(): VersusLayout | null;
@@ -84,6 +86,8 @@ export interface VersusTestState {
   cpuSlabs: number;
   sent: [number, number];
   cpuSwaps: number;
+  /** Leaving now would be recorded as a forfeit. */
+  needsLeaveConfirm: boolean;
   record: { played: number; won: number; lost: number };
 }
 
@@ -96,7 +100,16 @@ export interface VersusMode {
   afterTick(): void;
   /** The CPU board to draw, or null outside a match. */
   readonly opponentSim: SimState | null;
-  /** Leaving to the menu: drop the match (an unfinished match is not recorded). */
+  /**
+   * Leaving now would forfeit the match (≥ 1 round played, or the first round has run ≥ 10 s):
+   * the UI should ask for confirmation before calling `leave()`.
+   */
+  readonly needsLeaveConfirm: boolean;
+  /**
+   * Leaving to the menu: drop the match. When `needsLeaveConfirm` is true the match is recorded
+   * as a forfeit loss; otherwise (nothing really played yet, or the match is over) nothing is
+   * recorded.
+   */
   leave(): void;
   readonly testApi: VersusTestApi;
 }
@@ -134,11 +147,13 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
     const oppDanger = o.danger || dangerColumns(o).length > 0;
     const sent = match.vs.sides[0].stats.sent;
     const oppSent = match.vs.sides[1].stats.sent;
+    const needsLeaveConfirm = match.needsLeaveConfirm;
     const key = [
       sent,
       oppSent,
       oppDanger,
       warnKey,
+      needsLeaveConfirm,
       queue.map((q) => `${q.id}:${q.width}x${q.height}`).join(','),
       oppQueue.map((q) => `${q.id}:${q.width}x${q.height}`).join(','),
     ].join('|');
@@ -151,8 +166,13 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
       oppQueue,
       queueCells: queuedCells(p),
       oppDanger,
-      armMs: Math.round((match.vs.rules.attackDelay / TICKS_PER_SECOND) * 1000),
+      // The player's incoming garbage is the CPU's: its handicap may add arming time.
+      armMs: Math.round(
+        ((match.vs.rules.attackDelay + match.vs.rules.sides[1].extraDelay) / TICKS_PER_SECOND) *
+          1000,
+      ),
       warnKey,
+      needsLeaveConfirm,
     };
     store.set({ versusHud: hud });
   };
@@ -258,30 +278,36 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
     };
   };
 
+  /** Fold a decided match (incl. a forfeit) into the save. */
+  const recordMatch = (m: VersusMatch): void => {
+    const totals = m.totals();
+    save.update((d) => {
+      recordVersusMatch(d, m.level, m.matchWinner, totals.ticks, totals.sent);
+      let blocks = 0;
+      for (const r of m.rounds) blocks += r.blocksCleared;
+      // Versus has no score record: the per-difficulty record lives in `save.versus`.
+      recordGame(d, 'versus', {
+        score: 0,
+        maxChain: totals.maxChain,
+        maxCombo: totals.maxCombo,
+        blocksCleared: blocks,
+        seconds: Math.floor(totals.ticks / TICKS_PER_SECOND),
+      });
+    });
+  };
+
   const onRoundEnd = (): void => {
     const m = match;
     if (!m) return;
     const round = m.finishRound();
     if (!round) return;
+    publishHud(true);
     loop.pause();
     session.setRaiseButton(false);
     store.set({ raiseHeld: false });
     const won = round.winner === 0;
     if (m.matchOver) {
-      const totals = m.totals();
-      save.update((d) => {
-        recordVersusMatch(d, m.level, m.matchWinner, totals.ticks, totals.sent);
-        let blocks = 0;
-        for (const r of m.rounds) blocks += r.blocksCleared;
-        // Versus has no score record: the per-difficulty record lives in `save.versus`.
-        recordGame(d, 'versus', {
-          score: 0,
-          maxChain: totals.maxChain,
-          maxCombo: totals.maxCombo,
-          blocksCleared: blocks,
-          seconds: Math.floor(totals.ticks / TICKS_PER_SECOND),
-        });
-      });
+      recordMatch(m);
       void save.flush();
       syncRecords();
     }
@@ -357,13 +383,22 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
     audio.playMusic('menu');
   };
 
+  /** A Full-Version-only CPU level was picked: offer the unlock. */
+  const lockedLevel = (): void => {
+    if (host.openPaywall) {
+      host.openPaywall('versus');
+      return;
+    }
+    haptics.notify('warning');
+    host.showToast(t('versus.needsFull'));
+  };
+
   const actions: VersusActions = {
     selectLevel(level) {
       audio.uiTap();
       if (!isCpuLevel(level)) return;
       if (!versusLevelAvailable(level, store.get().fullVersion)) {
-        haptics.notify('warning');
-        host.showToast(t('versus.needsFull'));
+        lockedLevel();
         return;
       }
       haptics.selection();
@@ -378,7 +413,7 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
       void audio.unlock();
       const { level, format } = store.get().versusSetup;
       if (!versusLevelAvailable(level, store.get().fullVersion)) {
-        host.showToast(t('versus.needsFull'));
+        lockedLevel();
         return;
       }
       startMatch(host.randomSeed(), level, format);
@@ -426,6 +461,7 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
         cpuSlabs: m?.opponent.garbage.length ?? 0,
         sent: m ? [m.vs.sides[0].stats.sent, m.vs.sides[1].stats.sent] : [0, 0],
         cpuSwaps: m?.cpu.stats.swaps ?? 0,
+        needsLeaveConfirm: m?.needsLeaveConfirm ?? false,
         record: { played: rec.played, won: rec.won, lost: rec.lost },
       };
     },
@@ -461,8 +497,17 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
     get opponentSim() {
       return match ? match.opponent : null;
     },
+    get needsLeaveConfirm() {
+      return match?.needsLeaveConfirm ?? false;
+    },
     leave() {
       window.clearTimeout(endTimer);
+      const m = match;
+      if (m?.forfeit()) {
+        recordMatch(m);
+        void save.flush();
+        syncRecords();
+      }
       match = null;
       store.set({ versus: null, versusHud: null, versusResult: null });
     },

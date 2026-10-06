@@ -2,7 +2,7 @@ import { DEFAULT_CONFIG, TICKS_PER_SECOND } from '../config';
 import { hashString, stableStringify } from '../replay';
 import { createRng, nextFloat, randInt, type RngState } from '../rng';
 import type { SimState } from '../types';
-import { CURSES, isCurseId } from './bosses';
+import { CURSES, getCurse, isCurseId } from './bosses';
 import { getCharm, isCharmId } from './charms';
 import { MAX_BRIGHTNESS, getDeck, isDeckId } from './decks';
 import { runEconomy } from './effects';
@@ -72,8 +72,13 @@ export function makePlan(rng: RngState, deckId: string, brightness: number): Pla
     }
     const count = brightness >= 8 ? 2 : 1;
     const curses: string[] = [];
-    for (let k = 0; k < count && cursePool.length > 0; k++) {
-      curses.push(cursePool.splice(randInt(rng, cursePool.length), 1)[0] as string);
+    for (let k = 0; k < count; k++) {
+      // The harshest curses (`minAct`) never appear on the act-1 boss.
+      const allowed = cursePool.filter((id) => (getCurse(id).minAct ?? 1) <= act);
+      if (allowed.length === 0) break;
+      const id = allowed[randInt(rng, allowed.length)] as string;
+      cursePool.splice(cursePool.indexOf(id), 1);
+      curses.push(id);
     }
     plan.push({ act, stage: BOSS_STAGE, goalType: 'scoreInTime', curses });
   }

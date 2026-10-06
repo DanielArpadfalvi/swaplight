@@ -22,6 +22,26 @@ export type { Overlay, Screen } from './nav';
 
 export type RestoreStatus = 'idle' | 'busy' | 'restored' | 'nothing' | 'failed';
 
+/** What opened the Full Version sheet (picks the context line at its top). */
+export type PaywallReason =
+  'decks' | 'brightness' | 'versus' | 'daily' | 'puzzles' | 'menu' | 'settings';
+
+/** Purchase flow state of the Full Version sheet. */
+export type PaywallStatus = 'idle' | 'buying' | 'success' | 'pending' | 'failed' | 'cancelled';
+
+export interface PaywallState {
+  reason: PaywallReason | null;
+  /** Store product: price loading, loaded (`price` set) or unavailable (offline, store error). */
+  product: 'loading' | 'ready' | 'unavailable';
+  /** Localised price string from the store, e.g. "$4.99" / "1 990 Ft". */
+  price: string | null;
+  status: PaywallStatus;
+  /** How `success` was reached (thank-you vs welcome-back copy). */
+  via: 'purchase' | 'restore' | null;
+  /** Increments on every success (restarts the celebration). */
+  key: number;
+}
+
 export interface Toast {
   text: string;
   /** Display time in ms. */
@@ -135,6 +155,11 @@ export interface VersusHudState {
   armMs: number;
   /** Increments on every big incoming warning (restarts the banner). */
   warnKey: number;
+  /**
+   * Leaving now would forfeit the match (recorded as a loss): ask for confirmation first
+   * (`VersusMode.needsLeaveConfirm`).
+   */
+  needsLeaveConfirm: boolean;
 }
 
 /** Placement of the Versus overlays (from the versus layout). */
@@ -230,6 +255,8 @@ export interface GameUiState {
   runSetup: { deckId: string; brightness: number };
   /** Unlock keys from the save (Brightness levels…). */
   unlocks: string[];
+  /** Run items seen so far (`relic.<id>`, `charm.<id>`, `boss.<id>`; from the save). */
+  collectionSeen: string[];
   /** Run saved in the save file (menu "Continue"). */
   savedRun: SavedRunInfo | null;
   score: number;
@@ -260,6 +287,7 @@ export interface GameUiState {
   modeStats: Record<string, ModeStats>;
   fullVersion: boolean;
   restoreStatus: RestoreStatus;
+  paywall: PaywallState;
   toast: Toast | null;
 }
 
@@ -280,6 +308,10 @@ export interface GameActions {
   closeOverlay(): void;
   updateSettings(patch: Partial<Settings>): void;
   restorePurchases(): void;
+  /** Open the Full Version sheet (every locked item leads here). */
+  openPaywall(reason: PaywallReason): void;
+  /** Buy the Full Version from the sheet. */
+  buyFullVersion(): void;
   /** Same as the hardware back button / Escape. */
   back(): void;
   exitApp(): void;
@@ -376,6 +408,7 @@ export const INITIAL_UI_STATE: GameUiState = {
   targeting: null,
   runSetup: { deckId: 'neon', brightness: 1 },
   unlocks: [],
+  collectionSeen: [],
   savedRun: null,
   score: 0,
   level: 1,
@@ -397,6 +430,7 @@ export const INITIAL_UI_STATE: GameUiState = {
   modeStats: {},
   fullVersion: false,
   restoreStatus: 'idle',
+  paywall: { reason: null, product: 'loading', price: null, status: 'idle', via: null, key: 0 },
   toast: null,
 };
 

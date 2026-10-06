@@ -36,6 +36,12 @@ export function slabGlowPadding(cell: number): number {
 export class GarbageSlabTextures {
   private readonly cache = new Map<string, SlabTextureSet>();
   private disposables: { destroy(): void }[] = [];
+  /** Numeric-key cache for one cell size / resolution / palette (see `get`). */
+  private readonly fast = new Map<number, SlabTextureSet>();
+  private fastCell = -1;
+  private fastResolution = -1;
+  /** Previous generation, destroyed on the next `clear()` (see `BlockTextureFactory.clear`). */
+  private retired: { destroy(): void }[] = [];
   private palette: Palette;
 
   constructor(
@@ -56,6 +62,21 @@ export class GarbageSlabTextures {
   }
 
   get(width: number, height: number, cell: number, state: SlabState = 'normal'): SlabTextureSet {
+    // Allocation-free fast path for the current cell size / resolution (every slab, every frame).
+    if (cell !== this.fastCell || this.renderer.resolution !== this.fastResolution) {
+      this.fast.clear();
+      this.fastCell = cell;
+      this.fastResolution = this.renderer.resolution;
+    }
+    const fastKey = (width * 64 + height) * 2 + (state === 'flash' ? 1 : 0);
+    const hit = this.fast.get(fastKey);
+    if (hit) return hit;
+    const set = this.lookup(width, height, cell, state);
+    this.fast.set(fastKey, set);
+    return set;
+  }
+
+  private lookup(width: number, height: number, cell: number, state: SlabState): SlabTextureSet {
     const key = `${this.palette.name}/${width}x${height}@${cell}/${state}/${this.renderer.resolution}`;
     let set = this.cache.get(key);
     if (!set) {
@@ -65,7 +86,9 @@ export class GarbageSlabTextures {
     return set;
   }
 
+  /** Drop the cache; the textures live one more generation (until the next `clear`). */
   clear(): void {
+    deferDestroy(this.retired);
     const doomed: { destroy(): void }[] = [...this.disposables];
     for (const set of this.cache.values()) {
       doomed.push(
@@ -74,8 +97,9 @@ export class GarbageSlabTextures {
       );
     }
     this.cache.clear();
+    this.fast.clear();
     this.disposables = [];
-    deferDestroy(doomed);
+    this.retired = doomed;
   }
 
   private linear(stops: readonly (readonly [number, number, number?])[]): FillGradient {

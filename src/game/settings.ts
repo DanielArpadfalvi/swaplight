@@ -17,6 +17,8 @@ export interface Settings {
   language: LanguageSetting;
   /** Show the "base × mult" chips under the score. */
   showBreakdown: boolean;
+  /** Larger UI text (menus, sheets, panels; applied by the UI as a font scale). */
+  largeText: boolean;
 }
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
@@ -27,6 +29,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   highContrast: false,
   language: 'auto',
   showBreakdown: true,
+  largeText: false,
 };
 
 function volume(v: unknown, fallback: number): number {
@@ -54,6 +57,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     highContrast: bool(r.highContrast, d.highContrast),
     language: isLanguageSetting(r.language) ? r.language : d.language,
     showBreakdown: bool(r.showBreakdown, d.showBreakdown),
+    largeText: bool(r.largeText, d.largeText),
   };
 }
 

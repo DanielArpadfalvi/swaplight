@@ -71,7 +71,10 @@ test('puzzles: packs → level grid → p1-01 solved with real swaps → stars �
     ).toBeVisible();
   }
   await page.getByTestId('puzzle-pack-2').click();
-  await expect(page.getByTestId('toast')).toContainText('Full Version');
+  await expect(page.getByTestId('paywall')).toBeVisible();
+  await expect(page.getByTestId('paywall-reason')).toContainText('puzzle pack');
+  await page.evaluate(() => window.__swaplight!.back());
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
   expect((await state(page)).screen).toBe('puzzlePacks');
   await shot(page, 'puzzle-packs');
 
@@ -102,6 +105,12 @@ test('puzzles: packs → level grid → p1-01 solved with real swaps → stars �
   await shot(page, 'puzzle-hint-text', 400);
   await page.getByTestId('puzzle-hint-ok').click();
   await expect(page.getByTestId('puzzle-hint-card')).toHaveCount(0);
+  // Back with the hint card open closes the card instead of pausing.
+  await page.getByTestId('puzzle-hint').click();
+  await expect(page.getByTestId('puzzle-hint-card')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('puzzle-hint-card')).toHaveCount(0);
+  expect((await page.evaluate(() => window.__swaplight!.getState())).screen).toBe('playing');
 
   // A wrong swap uses the only move → fail screen → undo → solve.
   await page.evaluate(() => window.__swaplight!.puzzle!.swap(11, 0));

@@ -19,6 +19,7 @@ A technikai részt (build, aláírási pipeline, store-anyagok, szövegek) a fej
 - Egy korai, stabil buildet jóval az 1.0 előtt feltöltünk, hogy a 14 nap minél hamarabb elindulhasson.
 
 ## 4. App adatlap a Console-ban
+> Elkészült anyagok: szövegek `store/listing/`, screenshotok `store/screenshots/`, kérdőív-válaszok `docs/store-privacy-answers.md`, adatvédelmi/támogatási oldal `docs/site/` – lásd `docs/RELEASE.md` 6. fejezet.
 - [ ] Adatvédelmi nyilatkozat URL (elkészítem, GitHub Pages-en hosztolható).
 - [ ] Data safety űrlap (offline játék, nincs adatgyűjtés – a válaszokat előkészítem).
 - [ ] Korhatár-besorolás (IARC kérdőív – a válaszokat előkészítem).
@@ -37,6 +38,7 @@ A technikai részt (build, aláírási pipeline, store-anyagok, szövegek) a fej
 ## 7. Egyszeri vásárlás (IAP)
 - [ ] Termék létrehozása a Console-ban: „Teljes verzió”, ~4,99 USD.
 - [ ] RevenueCat fiók (ingyenes szint) + összekötés a Play-jel service account kulccsal.
+- [ ] Termékazonosító: `swaplight_full_version`; RevenueCat entitlement `full_version`; `VITE_RC_API_KEY_ANDROID` GitHub secret; License testing a tesztelőknek – részletek: `RELEASE.md` 5. fejezet.
 
 ## 8. Kiadás
 - [ ] Belső teszt → zárt teszt (12 fő / 14 nap) → hozzáférés kérése az éles kiadáshoz → éles kiadás.

@@ -5,7 +5,7 @@ import { dangerColumns } from '../core/view';
 import { t, initI18n, getLanguage, onLanguageChange, setLanguage } from '../i18n';
 import { bindKeyboardInput, bindPointerInput } from '../input/dom';
 import { geometryForSim, type BoardGeometry } from '../input/geometry';
-import { createPlatform, type Platform } from '../platform';
+import { createPlatform, MockPurchases, type Platform } from '../platform';
 import { cellCenter, computeLayout, readSafeInsets, type GameLayout } from '../render/board/layout';
 import { computeVersusLayout, type VersusLayout } from '../render/board/versusLayout';
 import { GameScene } from '../render/scene';
@@ -14,8 +14,16 @@ import { mountUi } from '../ui/mount';
 import { createDailyMode } from './dailyMode';
 import { feedbackForEvents, musicIntensity, type Feedback } from './feedback';
 import { GameLoop } from './loop';
-import { startMode, type ModeHost } from './modes';
-import { backAction, popOverlay, pushOverlay, showsBoard, type Overlay } from './nav';
+import { startMode, type ModeHost, type ModeId } from './modes';
+import { createPaywall } from './paywall';
+import {
+  backAction,
+  popOverlay,
+  pushOverlay,
+  showsBoard,
+  versusNeedsLeaveConfirm,
+  type Overlay,
+} from './nav';
 import { recordGame } from './progress';
 import { createPuzzleMode } from './puzzleMode';
 import { createTutorialMode } from './tutorialMode';
@@ -23,13 +31,26 @@ import { createRunMode } from './runMode';
 import { SaveManager } from './save';
 import { EndlessSession } from './session';
 import { applySettings, sanitizeSettings, type Settings, type SettingsTargets } from './settings';
-import { INITIAL_UI_STATE, type GameActions, type GameUiState, type PlayMode } from './state';
+import {
+  INITIAL_UI_STATE,
+  type GameActions,
+  type GameUiState,
+  type PaywallReason,
+  type PlayMode,
+} from './state';
 import { createStore, type Store } from './store';
 import type { SwaplightTestApi } from './testApi';
 import { createVersusMode } from './versusMode';
 
 /** Board layout flavour (HUD height, versus split; 'static' = no preview strip). */
 type LayoutMode = Exclude<PlayMode, 'puzzle' | 'tutorial'> | 'static';
+
+/** Context line of the Full Version sheet when a locked menu mode is tapped. */
+const PAYWALL_REASON_BY_MODE: Partial<Record<ModeId, PaywallReason>> = {
+  versus: 'versus',
+  daily: 'daily',
+  puzzles: 'puzzles',
+};
 
 /** Delay between the top-out and the game over panel (lets the flash/shake play). */
 const GAME_OVER_PANEL_DELAY_MS = 750;
@@ -77,6 +98,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     best: save.data.modes.endless?.best ?? 0,
     language: getLanguage(),
     unlocks: [...save.data.unlocks],
+    collectionSeen: save.data.collectionSeen,
     versusRecords: { ...save.data.versus },
     canShare: platform.clipboard.available,
     puzzleRecords: save.data.puzzles,
@@ -88,6 +110,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       modeStats: data.modes,
       fullVersion: data.fullVersion,
       unlocks: data.unlocks,
+      collectionSeen: data.collectionSeen,
       versusRecords: data.versus,
       dailySave: { records: data.daily, streak: data.dailyStreak },
       puzzleRecords: data.puzzles,
@@ -102,7 +125,6 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       });
     }
   }
-  platform.purchases.onEntitlementChange(setFullVersion);
 
   const settingsTargets: SettingsTargets = {
     setVolume: (channel, v) => audio.setVolume(channel, v),
@@ -121,11 +143,46 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
 
   let toastKey = 0;
   let toastTimer: number | undefined;
+  /** Screen the current toast belongs to: a screen change clears it (it never covers the next one). */
+  let toastScreen: GameUiState['screen'] | null = null;
   const showToast = (text: string, ms = TOAST_MS): void => {
+    toastScreen = store.get().screen;
     store.set({ toast: { text, ms, key: ++toastKey } });
     window.clearTimeout(toastTimer);
     toastTimer = window.setTimeout(() => store.set({ toast: null }), ms);
   };
+  store.subscribe((state) => {
+    if (state.toast && state.screen !== toastScreen) {
+      window.clearTimeout(toastTimer);
+      store.set({ toast: null });
+    }
+  });
+
+  const paywall = createPaywall({
+    store,
+    purchases: platform.purchases,
+    ready: purchasesReady,
+    setFullVersion,
+    show: () => setOverlays(pushOverlay(store.get().overlays, 'paywall')),
+    feedback: {
+      tap: () => audio.uiTap(),
+      celebrate() {
+        audio.purchase();
+        window.setTimeout(() => audio.itemUnlock(), 420);
+        platform.haptics.notify('success');
+      },
+      warn: () => platform.haptics.notify('warning'),
+    },
+  });
+
+  platform.purchases.onEntitlementChange((full) => {
+    setFullVersion(full);
+    paywall.entitlementChanged(full);
+  });
+
+  void purchasesReady.then(() => {
+    if (!store.get().fullVersion) paywall.prefetch();
+  });
 
   const flushSave = (): Promise<void> => save.flush();
   window.addEventListener('pagehide', () => {
@@ -178,8 +235,11 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         ...(layoutMode === 'run' || layoutMode === 'daily'
           ? { hudFraction: 0.235, minHud: 176, maxHud: 214 }
           : {}),
-        // Puzzle / tutorial boards never rise: no preview strip.
-        ...(layoutMode === 'static' ? { previewCells: 0 } : {}),
+        // Puzzle / tutorial boards never rise: no preview strip. Their HUD (title + pause row,
+        // goal card + moves / coach card) needs a taller band than Endless.
+        ...(layoutMode === 'static'
+          ? { previewCells: 0, hudFraction: 0.25, minHud: 164, maxHud: 214 }
+          : {}),
       });
       store.set({ versusLayout: null });
     }
@@ -441,6 +501,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     loop,
     isFrozen: () => frozen,
     showToast: (text) => showToast(text),
+    openPaywall: (reason) => paywall.open(reason),
     setLayoutMode,
     geometry,
     resetBoard() {
@@ -467,6 +528,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     loop,
     isFrozen: () => frozen,
     showToast: (text: string) => showToast(text),
+    openPaywall: (reason: PaywallReason) => paywall.open(reason),
     setLayoutMode,
     geometry,
     resetBoard() {
@@ -496,7 +558,11 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   window.setInterval(() => dailyMode.syncToday(), 30_000);
 
   const puzzleMode = createPuzzleMode(boardModeHost);
-  const tutorialMode = createTutorialMode({ ...boardModeHost, toMenu: () => toMenu() });
+  const tutorialMode = createTutorialMode({
+    ...boardModeHost,
+    toMenu: () => toMenu(),
+    startRun: () => runMode.open(),
+  });
 
   /**
    * Leave the mode that owns the board before another flow takes over: Run is kept saved, Versus /
@@ -533,12 +599,19 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   };
 
   const handleBack = (): void => {
-    const { screen, overlays } = store.get();
-    const action = backAction(screen, overlays);
+    const { screen, overlays, mode, charmMenu, targeting, puzzle } = store.get();
+    const charmOpen = mode === 'run' && (charmMenu !== null || targeting !== null);
+    const hintOpen = mode === 'puzzle' && puzzle.hintCard !== null;
+    const cardOpen = charmOpen || hintOpen;
+    const action = backAction(screen, overlays, cardOpen);
     switch (action.type) {
       case 'closeOverlay':
         audio.uiTap();
         setOverlays(popOverlay(overlays));
+        break;
+      case 'closeCard':
+        if (charmOpen) runMode.actions.cancelCharm();
+        else puzzleMode.actions.closeHint();
         break;
       case 'pause':
         actions.pause();
@@ -547,7 +620,13 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         actions.resume();
         break;
       case 'toMenu':
-        actions.menu();
+        // Leaving an undecided Versus match forfeits it: confirm first.
+        if (versusNeedsLeaveConfirm(store.get())) {
+          audio.uiTap();
+          setOverlays(pushOverlay(overlays, 'leaveConfirm'));
+        } else {
+          actions.menu();
+        }
         break;
       case 'toRunMap':
         runMode.backToMap();
@@ -581,7 +660,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       } else {
         audio.uiTap();
         platform.haptics.notify('warning');
-        if (status === 'locked') showToast(t('menu.lockedHint'));
+        if (status === 'locked') paywall.open(PAYWALL_REASON_BY_MODE[id] ?? 'menu');
         else if (status === 'soon') showToast(t('menu.soonHint'));
       }
     },
@@ -619,16 +698,16 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       updateSettings(patch);
     },
     restorePurchases() {
-      if (store.get().restoreStatus === 'busy') return;
+      void paywall.restore();
+    },
+    openPaywall(reason) {
+      void audio.unlock();
       audio.uiTap();
-      store.set({ restoreStatus: 'busy' });
-      void purchasesReady
-        .then(() => platform.purchases.restore())
-        .then((full) => {
-          setFullVersion(full);
-          store.set({ restoreStatus: full ? 'restored' : 'nothing' });
-        })
-        .catch(() => store.set({ restoreStatus: 'failed' }));
+      paywall.open(reason);
+    },
+    buyFullVersion() {
+      void audio.unlock();
+      void paywall.buy();
     },
     back() {
       handleBack();
@@ -745,6 +824,15 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     api.setFullVersion = (on: boolean) => setFullVersion(on);
     api.puzzle = puzzleMode.testApi;
     api.tutorial = tutorialMode.testApi;
+    const mock = platform.purchases instanceof MockPurchases ? platform.purchases : null;
+    if (mock) {
+      api.purchases = {
+        setNextOutcome: (outcome) => mock.setNextOutcome(outcome),
+        setLatency: (ms) => mock.setLatency(ms),
+        ownedElsewhere: () => mock.simulateOwnedElsewhere(),
+        setFullVersion: (value) => mock.setFullVersion(value),
+      };
+    }
     window.__swaplight = api;
   }
 }

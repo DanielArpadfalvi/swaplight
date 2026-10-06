@@ -1,6 +1,6 @@
 import { TICKS_PER_SECOND } from '../core/config';
 import { queueGarbage } from '../core/garbage';
-import { cpuStep, createCpu, type CpuLevel, type CpuState } from '../core/ai';
+import { cpuSideRules, cpuStep, createCpu, type CpuLevel, type CpuState } from '../core/ai';
 import {
   createVersus,
   stepVersus,
@@ -59,6 +59,9 @@ export interface VersusRoundResult {
   blocksCleared: number;
 }
 
+/** Leaving a first round that has run this long counts as a forfeit (10 s). */
+export const FORFEIT_AFTER_TICKS = 10 * TICKS_PER_SECOND;
+
 /** A best-of-N match against one CPU level. */
 export class VersusMatch {
   readonly seed: string;
@@ -92,7 +95,7 @@ export class VersusMatch {
   }
 
   private startRound(): void {
-    this.vs = createVersus(this.roundSeed);
+    this.vs = createVersus(this.roundSeed, {}, {}, { sides: [{}, cpuSideRules(this.level)] });
     this.cpu = createCpu(this.level, { seed: `${this.roundSeed}|cpu` });
     this.roundDone = false;
   }
@@ -148,6 +151,28 @@ export class VersusMatch {
     if (this.wins[0] >= need) return 0;
     if (this.wins[1] >= need) return 1;
     return null;
+  }
+
+  /**
+   * Leaving now would count as a forfeit (the UI should confirm first): the match is undecided
+   * and either a round has been played or the current round has run for `FORFEIT_AFTER_TICKS`.
+   */
+  get needsLeaveConfirm(): boolean {
+    if (this.matchOver) return false;
+    if (this.rounds.length > 0) return true;
+    return !this.vs.over && this.vs.tick >= FORFEIT_AFTER_TICKS;
+  }
+
+  /**
+   * Concede the match: an unfinished round is scored as a CPU win and the CPU is awarded the
+   * match. Returns false (and changes nothing) when leaving would not be a forfeit.
+   */
+  forfeit(): boolean {
+    if (!this.needsLeaveConfirm) return false;
+    if (!this.vs.over) this.forceRound(1);
+    this.finishRound();
+    if (!this.matchOver) this.wins[1] = roundsToWin(this.format);
+    return true;
   }
 
   /** Start the next round of an undecided match (a draw replays the round number). */

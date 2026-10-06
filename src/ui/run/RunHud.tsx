@@ -3,9 +3,10 @@ import { getCharm, getRelic, type RunState } from '../../core/run';
 import type { GameActions, GameUiState, RunTargeting } from '../../game/state';
 import { t } from '../../i18n';
 import { useFormat } from '../format';
+import { hudStyle } from '../hudBox';
 import { useCountUp } from '../useCountUp';
 import { CharmIcon, CurseIcon, GoalGlyph, RelicIcon, SkullIcon, SparkIcon } from './runIcons';
-import { charmDesc, charmName, clock, goalShort, relicDesc, relicName } from './runText';
+import { charmDesc, charmName, clock, curseName, goalShort, relicDesc, relicName } from './runText';
 
 interface Props {
   state: GameUiState;
@@ -18,13 +19,12 @@ export function RunHud({ state, actions }: Props) {
   const hud = state.runHud;
   const run = state.run;
   if (!hud || !run) return null;
-  const style = {
-    top: `${state.hudTop}px`,
-    height: `${state.hudHeight}px`,
-    left: `${state.boardLeft}px`,
-    width: `${state.boardWidth}px`,
-  };
+  const style = hudStyle(state);
   const timed = hud.goal.type !== 'survive';
+  // Narrow HUD with two or more curses: the first badge + "+N" keeps the clock readable.
+  const roomy = parseFloat(style.width ?? '0') >= 380;
+  const shownCurses = !roomy && hud.curses.length > 1 ? hud.curses.slice(0, 1) : hud.curses;
+  const moreCurses = hud.curses.length - shownCurses.length;
   const urgent = timed && !hud.won && hud.secondsLeft <= 10;
   return (
     <div
@@ -33,13 +33,22 @@ export function RunHud({ state, actions }: Props) {
       data-testid="run-hud"
     >
       <div class="run-hud-top">
-        <div class={`run-stage-chip${hud.isBoss ? ' is-boss' : ''}`}>
+        <div
+          class={`run-stage-chip${hud.isBoss ? ' is-boss' : ''}`}
+          data-testid="run-stage-chip"
+          title={hud.curses.map(curseName).join(' · ') || undefined}
+        >
           <span class="run-stage-act" aria-label={hud.isBoss ? t('run.bossShort') : undefined}>
             {hud.isBoss ? <SkullIcon size={18} /> : `${hud.act}-${hud.stage + 1}`}
           </span>
-          {hud.curses.map((c) => (
-            <CurseIcon key={c} id={c} size={20} />
+          {shownCurses.map((c) => (
+            <CurseIcon key={c} id={c} size={18} />
           ))}
+          {moreCurses > 0 && (
+            <span class="run-curse-more" data-testid="run-curse-more">
+              +{moreCurses}
+            </span>
+          )}
         </div>
         <div class={`run-clock${urgent ? ' is-urgent' : ''}`} data-testid="run-clock">
           <ClockGlyph />
