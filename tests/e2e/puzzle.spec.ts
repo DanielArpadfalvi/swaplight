@@ -71,7 +71,10 @@ test('puzzles: packs → level grid → p1-01 solved with real swaps → stars �
     ).toBeVisible();
   }
   await page.getByTestId('puzzle-pack-2').click();
-  await expect(page.getByTestId('toast')).toContainText('Full Version');
+  await expect(page.getByTestId('paywall')).toBeVisible();
+  await expect(page.getByTestId('paywall-reason')).toContainText('puzzle pack');
+  await page.evaluate(() => window.__swaplight!.back());
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
   expect((await state(page)).screen).toBe('puzzlePacks');
   await shot(page, 'puzzle-packs');
 

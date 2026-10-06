@@ -53,6 +53,8 @@ export interface PuzzleModeHost {
   loop: GameLoop;
   isFrozen(): boolean;
   showToast(text: string): void;
+  /** Open the Full Version sheet (locked pack); falls back to a toast. */
+  openPaywall?(reason: 'puzzles'): void;
   setLayoutMode(mode: BoardLayoutMode): void;
   geometry(): BoardGeometry | null;
   /** New / replaced sim: reset interpolation and effects. */
@@ -331,17 +333,27 @@ export function createPuzzleMode(host: PuzzleModeHost): PuzzleMode {
     audio.playMusic('menu');
   };
 
+  /** A Full-Version-only pack was picked: offer the unlock. */
+  const lockedPack = (): void => {
+    if (host.openPaywall) {
+      host.openPaywall('puzzles');
+      return;
+    }
+    haptics.notify('warning');
+    host.showToast(t('puzzle.packLocked'));
+  };
+
   const play = (id: string, force = false): boolean => {
     const def = puzzleById(id);
     if (!def) return false;
     if (!force && !isPuzzleUnlocked(def, save.data.puzzles, store.get().fullVersion)) {
       audio.uiTap();
-      haptics.notify('warning');
-      host.showToast(
-        puzzlePackAvailable(def.pack, store.get().fullVersion)
-          ? t('puzzle.levelLocked')
-          : t('puzzle.packLocked'),
-      );
+      if (puzzlePackAvailable(def.pack, store.get().fullVersion)) {
+        haptics.notify('warning');
+        host.showToast(t('puzzle.levelLocked'));
+      } else {
+        lockedPack();
+      }
       return false;
     }
     load(def);
@@ -358,8 +370,7 @@ export function createPuzzleMode(host: PuzzleModeHost): PuzzleMode {
       void audio.unlock();
       if (!puzzlePackAvailable(pack, store.get().fullVersion)) {
         audio.uiTap();
-        haptics.notify('warning');
-        host.showToast(t('puzzle.packLocked'));
+        lockedPack();
         return;
       }
       audio.uiConfirm();

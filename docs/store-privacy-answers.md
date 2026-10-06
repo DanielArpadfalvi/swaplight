@@ -161,4 +161,4 @@ pl. külső SDK-k korlátozása).
 - **Play – Target audience:** 13+ (indoklás: `store/listing/README.md`).
 - **App Store – Export compliance:** csak szabványos titkosítás (HTTPS) → `ITSAppUsesNonExemptEncryption = NO` (már az Info.plistben).
 - **EU DSA trader status:** lásd `docs/APP-STORE-CHECKLIST.md` 3. pont.
-- **Adatvédelmi nyilatkozat URL / Support URL:** lásd `docs/RELEASE.md` 5. fejezet.
+- **Adatvédelmi nyilatkozat URL / Support URL:** lásd `docs/RELEASE.md` 6. fejezet.

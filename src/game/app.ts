@@ -5,7 +5,7 @@ import { dangerColumns } from '../core/view';
 import { t, initI18n, getLanguage, onLanguageChange, setLanguage } from '../i18n';
 import { bindKeyboardInput, bindPointerInput } from '../input/dom';
 import { geometryForSim, type BoardGeometry } from '../input/geometry';
-import { createPlatform, type Platform } from '../platform';
+import { createPlatform, MockPurchases, type Platform } from '../platform';
 import { cellCenter, computeLayout, readSafeInsets, type GameLayout } from '../render/board/layout';
 import { computeVersusLayout, type VersusLayout } from '../render/board/versusLayout';
 import { GameScene } from '../render/scene';
@@ -14,7 +14,8 @@ import { mountUi } from '../ui/mount';
 import { createDailyMode } from './dailyMode';
 import { feedbackForEvents, musicIntensity, type Feedback } from './feedback';
 import { GameLoop } from './loop';
-import { startMode, type ModeHost } from './modes';
+import { startMode, type ModeHost, type ModeId } from './modes';
+import { createPaywall } from './paywall';
 import {
   backAction,
   popOverlay,
@@ -30,13 +31,26 @@ import { createRunMode } from './runMode';
 import { SaveManager } from './save';
 import { EndlessSession } from './session';
 import { applySettings, sanitizeSettings, type Settings, type SettingsTargets } from './settings';
-import { INITIAL_UI_STATE, type GameActions, type GameUiState, type PlayMode } from './state';
+import {
+  INITIAL_UI_STATE,
+  type GameActions,
+  type GameUiState,
+  type PaywallReason,
+  type PlayMode,
+} from './state';
 import { createStore, type Store } from './store';
 import type { SwaplightTestApi } from './testApi';
 import { createVersusMode } from './versusMode';
 
 /** Board layout flavour (HUD height, versus split; 'static' = no preview strip). */
 type LayoutMode = Exclude<PlayMode, 'puzzle' | 'tutorial'> | 'static';
+
+/** Context line of the Full Version sheet when a locked menu mode is tapped. */
+const PAYWALL_REASON_BY_MODE: Partial<Record<ModeId, PaywallReason>> = {
+  versus: 'versus',
+  daily: 'daily',
+  puzzles: 'puzzles',
+};
 
 /** Delay between the top-out and the game over panel (lets the flash/shake play). */
 const GAME_OVER_PANEL_DELAY_MS = 750;
@@ -111,7 +125,6 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       });
     }
   }
-  platform.purchases.onEntitlementChange(setFullVersion);
 
   const settingsTargets: SettingsTargets = {
     setVolume: (channel, v) => audio.setVolume(channel, v),
@@ -143,6 +156,32 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       window.clearTimeout(toastTimer);
       store.set({ toast: null });
     }
+  });
+
+  const paywall = createPaywall({
+    store,
+    purchases: platform.purchases,
+    ready: purchasesReady,
+    setFullVersion,
+    show: () => setOverlays(pushOverlay(store.get().overlays, 'paywall')),
+    feedback: {
+      tap: () => audio.uiTap(),
+      celebrate() {
+        audio.purchase();
+        window.setTimeout(() => audio.itemUnlock(), 420);
+        platform.haptics.notify('success');
+      },
+      warn: () => platform.haptics.notify('warning'),
+    },
+  });
+
+  platform.purchases.onEntitlementChange((full) => {
+    setFullVersion(full);
+    paywall.entitlementChanged(full);
+  });
+
+  void purchasesReady.then(() => {
+    if (!store.get().fullVersion) paywall.prefetch();
   });
 
   const flushSave = (): Promise<void> => save.flush();
@@ -462,6 +501,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     loop,
     isFrozen: () => frozen,
     showToast: (text) => showToast(text),
+    openPaywall: (reason) => paywall.open(reason),
     setLayoutMode,
     geometry,
     resetBoard() {
@@ -488,6 +528,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     loop,
     isFrozen: () => frozen,
     showToast: (text: string) => showToast(text),
+    openPaywall: (reason: PaywallReason) => paywall.open(reason),
     setLayoutMode,
     geometry,
     resetBoard() {
@@ -619,7 +660,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       } else {
         audio.uiTap();
         platform.haptics.notify('warning');
-        if (status === 'locked') showToast(t('menu.lockedHint'));
+        if (status === 'locked') paywall.open(PAYWALL_REASON_BY_MODE[id] ?? 'menu');
         else if (status === 'soon') showToast(t('menu.soonHint'));
       }
     },
@@ -657,16 +698,16 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       updateSettings(patch);
     },
     restorePurchases() {
-      if (store.get().restoreStatus === 'busy') return;
+      void paywall.restore();
+    },
+    openPaywall(reason) {
+      void audio.unlock();
       audio.uiTap();
-      store.set({ restoreStatus: 'busy' });
-      void purchasesReady
-        .then(() => platform.purchases.restore())
-        .then((full) => {
-          setFullVersion(full);
-          store.set({ restoreStatus: full ? 'restored' : 'nothing' });
-        })
-        .catch(() => store.set({ restoreStatus: 'failed' }));
+      paywall.open(reason);
+    },
+    buyFullVersion() {
+      void audio.unlock();
+      void paywall.buy();
     },
     back() {
       handleBack();
@@ -783,6 +824,15 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     api.setFullVersion = (on: boolean) => setFullVersion(on);
     api.puzzle = puzzleMode.testApi;
     api.tutorial = tutorialMode.testApi;
+    const mock = platform.purchases instanceof MockPurchases ? platform.purchases : null;
+    if (mock) {
+      api.purchases = {
+        setNextOutcome: (outcome) => mock.setNextOutcome(outcome),
+        setLatency: (ms) => mock.setLatency(ms),
+        ownedElsewhere: () => mock.simulateOwnedElsewhere(),
+        setFullVersion: (value) => mock.setFullVersion(value),
+      };
+    }
     window.__swaplight = api;
   }
 }

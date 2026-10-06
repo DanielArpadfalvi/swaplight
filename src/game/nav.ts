@@ -34,7 +34,8 @@ export type Overlay =
   | 'privacy'
   | 'exitConfirm'
   | 'abandonConfirm'
-  | 'leaveConfirm';
+  | 'leaveConfirm'
+  | 'paywall';
 
 /** The parts of the UI state that decide whether leaving a Versus match needs a confirmation. */
 export interface VersusLeaveInfo {

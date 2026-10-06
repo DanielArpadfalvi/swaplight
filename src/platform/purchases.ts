@@ -22,7 +22,7 @@ export interface PurchaseResult {
 }
 
 /**
- * In-app purchase abstraction (M8 adds the RevenueCat implementation).
+ * In-app purchase abstraction (`MockPurchases` on web/dev, `RevenueCatPurchases` on device).
  * Call `init()` once at startup before relying on `isFullVersion()`.
  */
 export interface Purchases {
@@ -48,6 +48,7 @@ export const MOCK_PURCHASES_STORAGE_KEY = 'purchases.mock.fullVersion';
 export class MockPurchases implements Purchases {
   private full = false;
   private nextOutcome: PurchaseOutcome = 'purchased';
+  private latencyMs = 0;
   private readonly listeners = new ListenerSet<[boolean]>();
 
   constructor(
@@ -69,6 +70,7 @@ export class MockPurchases implements Purchases {
   }
 
   async purchaseFullVersion(): Promise<PurchaseResult> {
+    await this.delay();
     const outcome = this.nextOutcome;
     this.nextOutcome = 'purchased';
     if (outcome === 'purchased') {
@@ -84,6 +86,7 @@ export class MockPurchases implements Purchases {
   }
 
   async restore(): Promise<boolean> {
+    await this.delay();
     await this.init();
     return this.full;
   }
@@ -96,6 +99,11 @@ export class MockPurchases implements Purchases {
     return this.listeners.add(listener);
   }
 
+  private delay(): Promise<void> {
+    if (this.latencyMs <= 0) return Promise.resolve();
+    return new Promise((resolve) => setTimeout(resolve, this.latencyMs));
+  }
+
   /** Dev toggle: grant or revoke the full version (persisted). */
   async setFullVersion(value: boolean): Promise<void> {
     if (value) await this.storage.set(MOCK_PURCHASES_STORAGE_KEY, true);
@@ -106,6 +114,19 @@ export class MockPurchases implements Purchases {
   /** Outcome of the next `purchaseFullVersion()` call (then resets to `purchased`). */
   setNextOutcome(outcome: PurchaseOutcome): void {
     this.nextOutcome = outcome;
+  }
+
+  /**
+   * Test hook: the store knows about a purchase this install has not seen yet (e.g. bought on
+   * another device). Only `restore()` / the next `init()` picks it up.
+   */
+  async simulateOwnedElsewhere(): Promise<void> {
+    await this.storage.set(MOCK_PURCHASES_STORAGE_KEY, true);
+  }
+
+  /** Simulated store latency (ms) of `purchaseFullVersion()` / `restore()`, for UI states. */
+  setLatency(ms: number): void {
+    this.latencyMs = Math.max(0, ms);
   }
 
   private update(value: boolean): void {

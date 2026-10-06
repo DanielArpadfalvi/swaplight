@@ -8,6 +8,7 @@ import { hudStyle } from './hudBox';
 import { IconPlay, IconSettings } from './icons';
 import { CollectionScreen, CreditsScreen, ExitDialog, PrivacyScreen } from './InfoScreens';
 import { MainMenu } from './Menu';
+import { PaywallScreen } from './Paywall';
 import { Presence } from './Presence';
 import { SettingsScreen } from './Settings';
 import { StatsScreen } from './Stats';
@@ -58,6 +59,7 @@ const OVERLAYS: readonly Overlay[] = [
   'exitConfirm',
   'abandonConfirm',
   'leaveConfirm',
+  'paywall',
 ];
 
 export function App({ store, actions }: AppProps) {
@@ -225,6 +227,8 @@ function renderOverlay(
       return <AbandonDialog {...props} />;
     case 'leaveConfirm':
       return <LeaveMatchDialog {...props} />;
+    case 'paywall':
+      return <PaywallScreen state={state} {...props} />;
   }
 }
 

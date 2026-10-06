@@ -54,10 +54,13 @@ test('menu → settings persist across reload → endless → pause → quit to 
   expect((await page.evaluate(() => window.__swaplight!.getRenderInfo())).boardVisible).toBe(false);
   await shot(page, 'menu');
 
-  // A locked mode explains itself instead of starting.
+  // A locked mode opens the Full Version sheet instead of starting.
   await page.getByTestId('mode-daily').click();
-  await expect(page.getByTestId('toast')).toBeVisible();
+  await expect(page.getByTestId('paywall')).toBeVisible();
+  await expect(page.getByTestId('paywall-reason')).toContainText('Daily Challenge');
   expect((await state(page)).screen).toBe('menu');
+  await page.evaluate(() => window.__swaplight!.back());
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
 
   // Settings: change a few values.
   await page.getByTestId('open-settings').click();

@@ -35,7 +35,11 @@ jobs:
         with:
           xcode-version: latest-stable
       - run: npm ci
-      - run: npx vite build
+      - name: Build web assets
+        env:
+          # RevenueCat public SDK key (optional; without it the build has no working store).
+          VITE_RC_API_KEY_IOS: ${{ secrets.VITE_RC_API_KEY_IOS }}
+        run: npx vite build
       - run: npx cap sync ios
       - name: Build for iOS Simulator
         run: |
@@ -101,7 +105,16 @@ jobs:
         with:
           xcode-version: latest-stable
       - run: npm ci
-      - run: npx vite build
+      - name: Build web assets
+        env:
+          # RevenueCat public SDK key. Without it the native app uses an "unavailable" store
+          # (nothing can be bought; never the mock store), which must never ship: warn loudly.
+          VITE_RC_API_KEY_IOS: ${{ secrets.VITE_RC_API_KEY_IOS }}
+        run: |
+          if [ -z "$VITE_RC_API_KEY_IOS" ]; then
+            echo "::warning title=RevenueCat key missing::VITE_RC_API_KEY_IOS is not set - this build cannot sell the Full Version (store unavailable)."
+          fi
+          npx vite build
       - run: npx cap sync ios
       - name: Install App Store Connect API key
         env:

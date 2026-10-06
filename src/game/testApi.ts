@@ -1,4 +1,5 @@
 import type { SimState } from '../core/types';
+import type { PurchaseOutcome } from '../platform/purchases';
 import type { Overlay, Screen } from './nav';
 import type { DailyTestApi } from './dailyMode';
 import type { PuzzleTestApi } from './puzzleMode';
@@ -53,6 +54,15 @@ export interface SwaplightTestApi {
   puzzle?: PuzzleTestApi;
   /** Tutorial hooks (step control, scripted moves). */
   tutorial?: TutorialTestApi;
+  /** MockPurchases controls (web builds only): simulate store outcomes and latency. */
+  purchases?: {
+    /** Outcome of the next purchase (then back to `purchased`). */
+    setNextOutcome(outcome: PurchaseOutcome): void;
+    setLatency(ms: number): void;
+    /** The store knows a purchase this install has not seen yet (for the restore flow). */
+    ownedElsewhere(): Promise<void>;
+    setFullVersion(value: boolean): Promise<void>;
+  };
 }
 
 export interface SwaplightStateSummary {

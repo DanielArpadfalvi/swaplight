@@ -99,9 +99,13 @@ test('versus: select → play vs CPU → garbage both ways → win → rematch �
   await page.getByTestId('mode-versus').click();
   await expect(page.getByTestId('versus-setup')).toBeVisible();
   await expect(page.getByTestId('vs-level-1')).toHaveAttribute('aria-checked', 'true');
-  // Hard needs the Full Version: explained, selection unchanged.
+  // Hard needs the Full Version: the paywall opens, selection unchanged.
   await page.getByTestId('vs-level-3').click();
-  await expect(page.getByTestId('toast')).toBeVisible();
+  await expect(page.getByTestId('paywall')).toBeVisible();
+  await expect(page.getByTestId('paywall-reason')).toContainText('difficulty');
+  await page.evaluate(() => window.__swaplight!.back());
+  await expect(page.getByTestId('paywall')).toHaveCount(0);
+  await expect(page.getByTestId('versus-setup')).toBeVisible();
   await expect(page.getByTestId('vs-level-1')).toHaveAttribute('aria-checked', 'true');
   await page.getByTestId('vs-level-2').click();
   await expect(page.getByTestId('vs-level-2')).toHaveAttribute('aria-checked', 'true');
