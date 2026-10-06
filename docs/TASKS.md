@@ -49,5 +49,5 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 
 ## M9 – Release prep
 - [x] T9.1 Store listing EN/HU, generated screenshots, privacy policy, age-rating answers
-- [ ] T9.2 Signed release pipeline + fastlane, `docs/RELEASE.md`
+- [~] T9.2 Signed release pipeline + `docs/RELEASE.md` – workflows ready; first real signed run waits for the owner's store secrets
 - [x] T9.3 Balance + full QA pass

@@ -19,9 +19,13 @@ Utolsó frissítés: 2026-10-06. Ez a fájl ahhoz kell, hogy a fejlesztést egy 
 
 Részletes feladatlista: `docs/TASKS.md`. Terv: `docs/PLAN.md`. Kiadási útmutató: `docs/RELEASE.md`.
 
-### Ami az átadás pillanatában futott
-- **T9.3 utolsó QA-kör** egy agentben: regressziós végigjátszás 3 képernyőméreten EN/HU, ismert hibák (hosszú kombó/lánc felirat kilóg a pályáról, Napi kihívás grafikon utolsó oszlopa), support e-mail (`swaplight.support@gmail.com`) és `swaplight-site` linkek beírása, `.github/workflows/pages.yml` törlése, `scripts/publish-site.sh`, teljesítménymérés.
-- Ha az új munkamenetben a `docs/TASKS.md`-ben a **T9.3 nincs kipipálva**, akkor ez nem fejeződött be / nem lett pusholva → **futtasd újra** (a lista fent).
+### Átadáskori állapot
+- Az átadáskor **nem futott semmi**: a T9.3 utolsó QA-kör kész, pusholva és átvezetve a `main`-re (679 unit + 26 e2e teszt zöld).
+- **Következő lépések** (új munkamenetben):
+  1. **T9.2 élesítése:** ha a secretek (lásd 7. pont) megvannak, első aláírt AAB és TestFlight build a GitHub Actions-ből (`android.yml` → release-aab, `ios.yml` → release), és a hibák javítása. Az iOS signed export még soha nem futott élesben – ha az unsigned archive + cloud signing nem megy, át kell állni signed archive-ra (`-allowProvisioningUpdates`), lásd `docs/RELEASE.md`.
+  2. Valódi telefonos tesztelés visszajelzései alapján finomhangolás (pl. Futam egyensúly, Versus szintek).
+  3. Opcionális P3-ak a legutóbbi QA-ból: Endless tipp eltakarja a pontszám feliratát 360×640-en az első másodpercekben; Szikra számláló ezres tagolás nélkül („1305”); HU „PONT” vs „PONTSZÁM” felirat a Futam HUD-ban; Kapcsolat sor ikonja jobbra igazodik; „FŐELLENSÉGEK” fül 360 px-en ~9 px-re kicsinyedik.
+  4. Ezután: következő projekt (Worms-szerű aszinkron artillery).
 
 ## 2. Repók és ágak
 
