@@ -3,8 +3,8 @@
 Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator). Acceptance criteria (AC) must all hold.
 
 ## M0 – Foundation
-- [ ] **T0.1 Scaffold** – Vite + TS strict, ESLint (flat config) + Prettier, Vitest, Playwright (Chromium from /opt/pw-browsers), PixiJS v8, Preact. Scripts per CLAUDE.md. Minimal `index.html` that mounts a Pixi canvas (portrait, fills viewport, DPR-aware) and a Preact overlay root. AC: `npm run check`, `npm run build`, `npm run test:e2e` (smoke test: page loads, canvas exists, no console errors) all pass.
-- [ ] **T0.2 CI** – `.github/workflows/ci.yml`: node 22, npm ci, check, build, e2e. AC: valid YAML, mirrors local commands.
+- [x] **T0.1 Scaffold** – Vite + TS strict, ESLint (flat config) + Prettier, Vitest, Playwright (Chromium from /opt/pw-browsers), PixiJS v8, Preact. Scripts per CLAUDE.md. Minimal `index.html` that mounts a Pixi canvas (portrait, fills viewport, DPR-aware) and a Preact overlay root. AC: `npm run check`, `npm run build`, `npm run test:e2e` (smoke test: page loads, canvas exists, no console errors) all pass.
+- [x] **T0.2 CI** – `.github/workflows/ci.yml`: node 22, npm ci, check, build, e2e. AC: valid YAML, mirrors local commands.
 
 ## M1 – Core engine (`src/core`)
 - [ ] **T1.1 RNG + board model** – seeded PRNG (sfc32/mulberry32), board 6×12 + preview row, block states (idle, swapping, hovering, falling, landing, flashing/clearing, garbage), board generation without initial matches.
