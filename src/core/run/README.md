@@ -77,11 +77,14 @@ The Drought beats Chronoglass). The core effect handles stage chain counters
 
 | type          | target                                                                     | time limit           | start level         |
 | ------------- | -------------------------------------------------------------------------- | -------------------- | ------------------- |
-| `scoreInTime` | `niceRound(700 × act[1, 2, 4] × stage[1, 1.2, 1.4, boss 1.7] × (B≥2: 1.15))`; B≥6 act factors 1, 2.5, 5.5 | 60 s (boss 75 s) | `1 + 2(act−1) + (stage ≥ 2)` |
-| `clearBlocks` | `(45 + 8·stage + 16·(act−1)) × (B≥2: 1.1)` blocks (charm removals count)    | 90 s                 | same                |
-| `survive`     | survive the time limit                                                      | 40 + 5·stage + 10·(act−1) s | same **+ 4**  |
-| `chainTarget` | act 1: 1/2/3 chains ≥×2 · act 2: 3/4/5 chains ≥×2 · act 3: 1/2/3 chains ≥×3 | 90 s                 | same                |
+| `scoreInTime` | `niceRound(scoreByAct[360, 1400, 2800] × stage × (B≥2: 1.15))`, stage factors act 1 `[1, 1, 1.05, boss 1.4]`, acts 2–3 `[1, 1.2, 1.4, boss 1.7]`; B≥6 act bases 360, 1750, 3850 | 60 s (boss 75 s) | `1 + 2(act−1) + (stage ≥ 2 and act ≥ 2)` |
+| `clearBlocks` | `([40, 61, 77][act] + [3, 8, 8][act]·stage) × (B≥2: 1.1)` blocks (charm removals count) | 90 s     | same                |
+| `survive`     | survive the time limit                                                     | 40 + 5·stage + 10·(act−1) s | same **+ 2** (act 1) / **+ 4** |
+| `chainTarget` | act 1: 1 chain ≥×2 · act 2: 3/4/5 chains ≥×2 · act 3: 1/2/3 chains ≥×3        | 90 s                 | same                |
 
+Act 1 is tuned to be welcoming: a casual relic-less player who only makes single-swap matches
+(the `casualInputs` test bot, ~550 points per 60 s) clears ≈ 80 % of act-1 stages and ≈ 60 % of
+act-1 bosses. Act 2 targets need some relic synergy, act 3 a real build (see Balance below).
 Score goals scale steeply because relics multiply score; block/survive/chain goals scale gently
 and get their pressure from the speed level. A stage is **won** as soon as the value reaches
 the target, but it **finishes** only once the board settles, so a chain in progress keeps
@@ -200,7 +203,8 @@ and Joker Seed, and combo with Rainbow Bridge (mixed colors) and combo relics.
 
 ## Bosses (8 curses)
 
-One curse per boss (distinct across the run), two from Brightness 8. Renderer/UI flags live in
+One curse per boss (distinct across the run), two from Brightness 8. The harshest curses
+(`minAct: 2` – The Spectrum and The Drought) never appear on the act-1 boss. Renderer/UI flags live in
 `sim.modifiers`: `hiddenColor` (The Veil – draw that color invisible; Lantern removes it),
 `lockedColumns` / `swapLockUntil` (engine-enforced in `canSwap`; show a lock overlay; Skeleton Key
 removes them). Boss stages pay 8 base Szikra. i18n keys `boss.<id>`.
@@ -259,7 +263,9 @@ i18n keys `brightness.<n>`.
 - **Counterplay**: bosses are announced at run start; Lantern, Skeleton Key, Cryo, Lifeline are
   cheap answers to specific curses.
 - **Balance** (`BALANCE=1 npx vitest run tests/unit/core/run/balance.test.ts`): a relic-less
-  "human-speed" bot (≤ 2 swaps/s, 2-ply lookahead) scores ~1 500–1 900 per 60 s at any level, so
-  act-1 score goals need 0.4–0.65 of that, act 2 roughly 1×, act 3 2–2.5× (i.e. a relic build).
-  The greedy test bot wins ~30 % of B1 runs and ~0–20 % of B8 runs; most bot losses are ×3-chain
-  goals (it cannot plan chains), which humans can.
+  "human-speed" bot (≤ 2 swaps/s, 2-ply lookahead) scores ~2 000–2 300 per 60 s at any level, so
+  act 1 is trivial for it, act 2 needs ~0.7–0.9 of that (some relic synergy for real players), act 3
+  1.4–1.8× (a relic build). A casual single-swap bot (one match attempt per 1.25–2 s) scores
+  ~550 per 60 s and wins ≈ 80 % of act-1 stages / ≈ 60 % of act-1 bosses (report 3). The greedy
+  test bots win ~35–40 % of B1 runs and ~25–40 % of B8 runs; most bot losses are ×3-chain goals (it
+  cannot plan chains), which humans can.

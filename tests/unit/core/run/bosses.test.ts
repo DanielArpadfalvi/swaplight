@@ -59,6 +59,24 @@ describe('boss curses', () => {
     }
   });
 
+  it('the act-1 boss never carries the harshest curses (spectrum, drought)', () => {
+    const later = new Set<string>();
+    for (let i = 0; i < 60; i++) {
+      for (const b of [1, 8]) {
+        const plan = makePlan(createRng(`act1-${i}`), 'neon', b);
+        const act1 = plan.filter((p) => p.act === 1).flatMap((p) => p.curses);
+        expect(act1).toHaveLength(b >= 8 ? 2 : 1);
+        expect(act1).not.toContain('spectrum');
+        expect(act1).not.toContain('drought');
+        for (const c of plan.filter((p) => p.act > 1).flatMap((p) => p.curses)) later.add(c);
+      }
+    }
+    // They still show up later in the run.
+    expect(later.has('spectrum')).toBe(true);
+    expect(later.has('drought')).toBe(true);
+    expect(CURSES.filter((c) => c.minAct === 2).map((c) => c.id)).toEqual(['spectrum', 'drought']);
+  });
+
   it('drought: no stop time', () => {
     const { setup, sim } = stageSim(boss(['drought']));
     expect(setup.hooks.stopTicks!(150, { sim, combo: 6, chain: 3 })).toBe(0);

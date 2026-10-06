@@ -1,4 +1,5 @@
 import { TICKS_PER_SECOND } from '../config';
+import type { VersusSideRules } from '../versus';
 
 /** CPU difficulty 1–5. */
 export type CpuLevel = 1 | 2 | 3 | 4 | 5;
@@ -38,7 +39,18 @@ export interface CpuProfile {
   budget: number;
   /** Rollout horizon cap (ticks). */
   horizon: number;
+  /**
+   * Versus attack handicap for this CPU's side (low levels only): share of its garbage that is
+   * sent, warm-up before its first attack, extra arming delay. See `VersusSideRules`.
+   */
+  handicap: Readonly<VersusSideRules>;
 }
+
+const NO_HANDICAP: Readonly<VersusSideRules> = Object.freeze({
+  attackPercent: 100,
+  attackFromTick: 0,
+  extraDelay: 0,
+});
 
 function profile(
   level: CpuLevel,
@@ -64,17 +76,23 @@ export const CPU_PROFILES: Readonly<Record<CpuLevel, CpuProfile>> = Object.freez
     raiseBelow: 4,
     budget: 400,
     horizon: 240,
+    handicap: Object.freeze({
+      attackPercent: 50,
+      attackFromTick: 15 * TICKS_PER_SECOND,
+      extraDelay: TICKS_PER_SECOND,
+    }),
   }),
   2: profile(2, 2.5, {
-    reactionTicks: 28,
-    maxDrag: 2,
+    reactionTicks: 18,
+    maxDrag: 3,
     pairs: 0,
     verify: 3,
-    mistakeRate: 0.12,
+    mistakeRate: 0.06,
     skillChains: false,
     raiseBelow: 5,
     budget: 500,
     horizon: 300,
+    handicap: NO_HANDICAP,
   }),
   3: profile(3, 4, {
     reactionTicks: 16,
@@ -86,6 +104,7 @@ export const CPU_PROFILES: Readonly<Record<CpuLevel, CpuProfile>> = Object.freez
     raiseBelow: 6,
     budget: 700,
     horizon: 360,
+    handicap: NO_HANDICAP,
   }),
   4: profile(4, 6, {
     reactionTicks: 9,
@@ -97,6 +116,7 @@ export const CPU_PROFILES: Readonly<Record<CpuLevel, CpuProfile>> = Object.freez
     raiseBelow: 7,
     budget: 900,
     horizon: 420,
+    handicap: NO_HANDICAP,
   }),
   5: profile(5, 8, {
     reactionTicks: 4,
@@ -108,10 +128,16 @@ export const CPU_PROFILES: Readonly<Record<CpuLevel, CpuProfile>> = Object.freez
     raiseBelow: 7,
     budget: 1100,
     horizon: 480,
+    handicap: NO_HANDICAP,
   }),
 });
 
 export function cpuProfile(level: number): CpuProfile {
   const l = Math.max(1, Math.min(5, Math.round(level))) as CpuLevel;
   return CPU_PROFILES[l];
+}
+
+/** Versus side rules for a CPU level's side (its attack handicap). */
+export function cpuSideRules(level: number): VersusSideRules {
+  return { ...cpuProfile(level).handicap };
 }

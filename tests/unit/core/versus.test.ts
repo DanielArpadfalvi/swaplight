@@ -142,6 +142,52 @@ describe('versus exchange', () => {
     expect(noCancel.sides[0].stats).toMatchObject({ cancelled: 0, sent: 6 });
   });
 
+  it('side rules: warm-up discards early attacks, extra delay arms later', () => {
+    const early = createVersus('combo', STATIC, STATIC, {
+      sides: [{ attackFromTick: 120 }, {}],
+    });
+    loadAscii(early.sides[0].sim, COMBO4);
+    const [, eb] = play(early, 10, [[{ type: 'swap', row: 10, col: 2 }]]);
+    expect(ofType(eb, 'garbageQueued')).toHaveLength(0);
+    expect(early.sides[0].stats.sent).toBe(0);
+
+    const slow = createVersus('combo', STATIC, STATIC, {
+      attackDelay: 30,
+      sides: [{ extraDelay: 45 }, {}],
+    });
+    loadAscii(slow.sides[0].sim, COMBO4);
+    const [, eb2] = play(slow, 10, [[{ type: 'swap', row: 10, col: 2 }]]);
+    expect(ofType(eb2, 'garbageQueued')[0]).toMatchObject({ width: 3, delay: 75 });
+    expect(slow.rules.sides[1]).toEqual({ attackPercent: 100, attackFromTick: 0, extraDelay: 0 });
+  });
+
+  it('side rules: attackPercent 50 sends every other slab (deterministic)', () => {
+    // Credit carried between attacks: 3 cells × 50 → 150; a 3-cell slab needs 300.
+    let credit = 0;
+    const sent: boolean[] = [];
+    for (let k = 0; k < 4; k++) {
+      const vs = createVersus('combo', STATIC, STATIC, { sides: [{ attackPercent: 50 }, {}] });
+      vs.sides[0].attackCredit = credit;
+      loadAscii(vs.sides[0].sim, COMBO4);
+      const [, eb] = play(vs, 10, [[{ type: 'swap', row: 10, col: 2 }]]);
+      sent.push(ofType(eb, 'garbageQueued').length === 1);
+      credit = vs.sides[0].attackCredit;
+    }
+    expect(sent).toEqual([false, true, false, true]);
+    const none = createVersus('combo', STATIC, STATIC, { sides: [{ attackPercent: 0 }, {}] });
+    loadAscii(none.sides[0].sim, COMBO4);
+    play(none, 10, [[{ type: 'swap', row: 10, col: 2 }]]);
+    expect(none.sides[0].stats.sent).toBe(0);
+  });
+
+  it('a handicapped side still cancels its own incoming garbage', () => {
+    const vs = createVersus('cancel', STATIC, STATIC, { sides: [{ attackPercent: 0 }, {}] });
+    loadAscii(vs.sides[0].sim, COMBO4);
+    queueGarbage(vs.sides[0].sim, 3, 1, { delay: 600 });
+    play(vs, 10, [[{ type: 'swap', row: 10, col: 2 }]]);
+    expect(vs.sides[0].stats).toMatchObject({ cancelled: 3, sent: 0 });
+  });
+
   it('the side that tops out loses; the match then stops', () => {
     const vs = createVersus('topout', STATIC, { config: { graceTicks: 20 } });
     for (let i = 0; i < 8; i++) queueGarbage(vs.sides[1].sim, 6, 2);

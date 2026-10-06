@@ -31,7 +31,11 @@ import {
 } from '../core/run';
 import type { ScoreModifier } from '../core/scoring';
 import type { SimHooks } from '../core/sim';
+import { TICKS_PER_SECOND } from '../core/config';
 import type { SimState } from '../core/types';
+import { recordGame } from './progress';
+import { unlocksForWin } from './runUnlocks';
+import type { SaveData } from './save';
 
 /**
  * Run-mode glue between the pure run layer (`src/core/run`) and the app: owns the current
@@ -373,5 +377,42 @@ export class RunController {
   /** Number of won stages. */
   get stagesCleared(): number {
     return this.run.history.filter((h) => h.won).length;
+  }
+
+  /** The run is over (lost, or the act-3 boss fell). */
+  get ended(): boolean {
+    return this.run.phase === 'lost' || this.run.phase === 'won';
+  }
+
+  /** Unlock keys earned by this run (set once the run is recorded). */
+  unlocked: string[] = [];
+  /** The finished run is already in the stats (`recordFinished`). */
+  recorded = false;
+
+  /**
+   * Record a finished (lost / won) run into the save: mode stats, brightness unlocks, and clear
+   * `runInProgress`. Idempotent – the end animation, the summary and an early app close
+   * (`pagehide` / pause) may all ask for it. Returns false when the run is not over yet.
+   * Mutates `save` (use inside `SaveManager.update`).
+   */
+  recordFinished(save: SaveData): boolean {
+    if (!this.ended) return false;
+    if (this.recorded) {
+      save.runInProgress = null;
+      return true;
+    }
+    this.recorded = true;
+    const r = this.run;
+    this.unlocked = r.phase === 'won' ? unlocksForWin(r.brightness, save.unlocks) : [];
+    recordGame(save, 'run', {
+      score: r.stats.totalScore,
+      maxChain: r.stats.maxChain,
+      maxCombo: r.stats.maxCombo,
+      blocksCleared: r.stats.blocksCleared,
+      seconds: Math.floor(this.playTicks / TICKS_PER_SECOND),
+    });
+    for (const key of this.unlocked) if (!save.unlocks.includes(key)) save.unlocks.push(key);
+    save.runInProgress = null;
+    return true;
   }
 }

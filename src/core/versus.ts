@@ -66,6 +66,29 @@ export function attacksFromEvents(events: readonly SimEvent[], cols = 6): Attack
   return out;
 }
 
+/**
+ * Per-side attack handicap (used to make low CPU levels gentler). Applied to what a side
+ * *sends* after cancelling; cancelling its own incoming garbage is never handicapped.
+ */
+export interface VersusSideRules {
+  /**
+   * Percentage (0–100) of this side's outgoing garbage that is actually sent. Whole slabs are
+   * dropped deterministically: each attack adds `cells × percent / 100` credit and a slab is
+   * sent only while the credit covers its cells (so 50 % sends about every other slab).
+   */
+  attackPercent: number;
+  /** This side's attacks are discarded before this versus tick (warm-up, 0 = none). */
+  attackFromTick: number;
+  /** Extra ticks added to `attackDelay` for this side's attacks. */
+  extraDelay: number;
+}
+
+export const DEFAULT_SIDE_RULES: Readonly<VersusSideRules> = Object.freeze({
+  attackPercent: 100,
+  attackFromTick: 0,
+  extraDelay: 0,
+});
+
 export interface VersusRules {
   /** Ticks between sending garbage and it being allowed to drop (default 1 s). */
   attackDelay: number;
@@ -73,13 +96,37 @@ export interface VersusRules {
   cancel: boolean;
   /** Both sides get the same board/preview seed (default true). */
   sameBoards: boolean;
+  /** Per-side attack handicaps ([side A, side B]). */
+  sides: [VersusSideRules, VersusSideRules];
 }
+
+/** Rules for `createVersus`: like `VersusRules`, with partial per-side rules. */
+export type VersusRulesInput = Partial<Omit<VersusRules, 'sides'>> & {
+  sides?: readonly [Partial<VersusSideRules>?, Partial<VersusSideRules>?];
+};
 
 export const DEFAULT_VERSUS_RULES: Readonly<VersusRules> = Object.freeze({
   attackDelay: TICKS_PER_SECOND,
   cancel: true,
   sameBoards: true,
+  sides: Object.freeze([DEFAULT_SIDE_RULES, DEFAULT_SIDE_RULES]) as unknown as [
+    VersusSideRules,
+    VersusSideRules,
+  ],
 });
+
+/** Merge rule overrides onto the defaults (fresh plain object, JSON safe). */
+export function makeVersusRules(rules: VersusRulesInput = {}): VersusRules {
+  const { sides, ...rest } = rules;
+  return {
+    ...DEFAULT_VERSUS_RULES,
+    ...rest,
+    sides: [
+      { ...DEFAULT_SIDE_RULES, ...sides?.[0] },
+      { ...DEFAULT_SIDE_RULES, ...sides?.[1] },
+    ],
+  };
+}
 
 export interface VersusSideConfig {
   config?: Partial<SimConfig>;
@@ -102,6 +149,8 @@ export interface VersusSideStats {
 export interface VersusSide {
   sim: SimState;
   stats: VersusSideStats;
+  /** Attack credit for `VersusSideRules.attackPercent` (cells × percent; plain number). */
+  attackCredit: number;
 }
 
 export type VersusSideIndex = 0 | 1;
@@ -126,14 +175,15 @@ export function createVersus(
   seed: Seed,
   configA: VersusSideConfig = {},
   configB: VersusSideConfig = {},
-  rules: Partial<VersusRules> = {},
+  rules: VersusRulesInput = {},
 ): VersusState {
-  const r: VersusRules = { ...DEFAULT_VERSUS_RULES, ...rules };
+  const r = makeVersusRules(rules);
   const side = (cfg: VersusSideConfig, index: VersusSideIndex): VersusSide => ({
     sim: createSim(versusSeed(seed, index, r), cfg.config, cfg.mode ?? 'endless', {
       modifiers: cfg.modifiers,
     }),
     stats: { sent: 0, cancelled: 0, received: 0, slabsSent: 0 },
+    attackCredit: 0,
   });
   return {
     seed,
@@ -189,6 +239,29 @@ function cancelIncoming(side: VersusSide, attacks: readonly AttackSlab[]): Attac
   return out;
 }
 
+/** Apply a side's attack handicap to what it is about to send (deterministic). */
+function handicap(
+  side: VersusSide,
+  rules: VersusSideRules | undefined,
+  tick: number,
+  attacks: AttackSlab[],
+): AttackSlab[] {
+  if (!rules || attacks.length === 0) return attacks;
+  if (tick < rules.attackFromTick) return [];
+  const percent = Math.max(0, Math.min(100, rules.attackPercent));
+  if (percent >= 100) return attacks;
+  const out: AttackSlab[] = [];
+  for (const a of attacks) {
+    const cells = a.width * a.height;
+    side.attackCredit = (side.attackCredit ?? 0) + cells * percent;
+    if (side.attackCredit >= cells * 100) {
+      side.attackCredit -= cells * 100;
+      out.push(a);
+    }
+  }
+  return out;
+}
+
 /**
  * Step both sides one tick (same inputs/hook semantics as `step`) and exchange
  * garbage. After the game is over this is a no-op.
@@ -211,18 +284,20 @@ export function stepVersus(
   ];
   for (const i of [0, 1] as const) {
     const side = vs.sides[i];
-    result.sent[i] = vs.rules.cancel ? cancelIncoming(side, raw[i]) : raw[i];
+    const out = vs.rules.cancel ? cancelIncoming(side, raw[i]) : raw[i];
+    result.sent[i] = handicap(side, vs.rules.sides?.[i], vs.tick, out);
   }
   for (const i of [0, 1] as const) {
     const from = vs.sides[i];
     const to = vs.sides[i === 0 ? 1 : 0];
     if (to.sim.gameOver) continue;
+    const delay = vs.rules.attackDelay + (vs.rules.sides?.[i]?.extraDelay ?? 0);
     for (const slab of result.sent[i]) {
       queueGarbage(
         to.sim,
         slab.width,
         slab.height,
-        { delay: vs.rules.attackDelay, fromChain: slab.fromChain },
+        { delay, fromChain: slab.fromChain },
         result.events[i === 0 ? 1 : 0],
       );
       const cells = slab.width * slab.height;
@@ -291,7 +366,7 @@ export function stepVersusRecorded(
 }
 
 export interface ReplayVersusOptions {
-  rules?: Partial<VersusRules>;
+  rules?: VersusRulesInput;
   hooks?: readonly [SimHooks?, SimHooks?];
   onStep?: (vs: VersusState, result: VersusStepResult) => void;
 }

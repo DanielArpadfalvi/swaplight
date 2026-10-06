@@ -35,6 +35,7 @@ export const CURSES: readonly CurseDef[] = Object.freeze([
     id: 'spectrum',
     desc: 'The Spectrum: one extra block color.',
     maxDeckColors: 5,
+    minAct: 2,
     config: (cfg) => {
       cfg.colors = Math.min(6, (cfg.colors ?? DEFAULT_CONFIG.colors) + 1);
     },
@@ -42,6 +43,7 @@ export const CURSES: readonly CurseDef[] = Object.freeze([
   curse({
     id: 'drought',
     desc: 'The Drought: combos and chains earn no stop time.',
+    minAct: 2,
     stopTicks: () => 0,
   }),
   curse({
