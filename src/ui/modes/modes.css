@@ -748,6 +748,21 @@
   box-shadow: 0 0 12px rgba(255, 210, 63, 0.95);
 }
 
+.daily-bar.is-practice {
+  background:
+    linear-gradient(180deg, #ffd23f, #ff8a3d) bottom / 100% var(--o) no-repeat,
+    rgba(255, 210, 63, 0.12);
+  border: 1px dashed rgba(255, 210, 63, 0.75);
+  box-shadow: none;
+}
+
+.daily-bar.is-today.is-practice {
+  background:
+    linear-gradient(180deg, #fff3b8, #ffd23f) bottom / 100% var(--o) no-repeat,
+    rgba(255, 210, 63, 0.18);
+  box-shadow: 0 0 10px rgba(255, 210, 63, 0.55);
+}
+
 .daily-bar.is-today.is-empty {
   background: rgba(255, 210, 63, 0.4);
 }

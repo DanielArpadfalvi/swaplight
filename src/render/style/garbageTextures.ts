@@ -1,6 +1,6 @@
-import { BlurFilter, Container, FillGradient, Graphics, Rectangle } from 'pixi.js';
-import type { Renderer, Texture } from 'pixi.js';
-import { deferDestroy } from './blockTextures';
+import { BlurFilter, Container, Graphics, Rectangle } from 'pixi.js';
+import type { Renderer, Texture, FillGradient } from 'pixi.js';
+import { deferDestroy, sharedGradient } from './blockTextures';
 import { mixColor, scaleColor } from './colorMath';
 import { NEON_PALETTE, type Palette } from './palette';
 
@@ -35,7 +35,6 @@ export function slabGlowPadding(cell: number): number {
  */
 export class GarbageSlabTextures {
   private readonly cache = new Map<string, SlabTextureSet>();
-  private disposables: { destroy(): void }[] = [];
   /** Numeric-key cache for one cell size / resolution / palette (see `get`). */
   private readonly fast = new Map<number, SlabTextureSet>();
   private fastCell = -1;
@@ -89,7 +88,7 @@ export class GarbageSlabTextures {
   /** Drop the cache; the textures live one more generation (until the next `clear`). */
   clear(): void {
     deferDestroy(this.retired);
-    const doomed: { destroy(): void }[] = [...this.disposables];
+    const doomed: { destroy(): void }[] = [];
     for (const set of this.cache.values()) {
       doomed.push(
         { destroy: () => set.body.destroy(true) },
@@ -98,23 +97,17 @@ export class GarbageSlabTextures {
     }
     this.cache.clear();
     this.fast.clear();
-    this.disposables = [];
     this.retired = doomed;
   }
 
   private linear(stops: readonly (readonly [number, number, number?])[]): FillGradient {
-    const grad = new FillGradient({
-      type: 'linear',
-      start: { x: 0, y: 0 },
-      end: { x: 0, y: 1 },
-      colorStops: stops.map(([offset, color, alpha]) => ({
+    return sharedGradient(
+      { x: 0, y: 1 },
+      stops.map(([offset, color, alpha]) => ({
         offset,
         color: alpha === undefined ? color : rgba(color, alpha),
       })),
-      textureSpace: 'local',
-    });
-    this.disposables.push(grad);
-    return grad;
+    );
   }
 
   private build(w: number, h: number, cell: number, state: SlabState): SlabTextureSet {

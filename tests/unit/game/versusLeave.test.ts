@@ -105,3 +105,30 @@ describe('versus mode leave()', () => {
     expect(save.data.versus['1']).toMatchObject({ played: 1, won: 1, lost: 0 });
   });
 });
+
+describe('versus mode locked level + paywall', () => {
+  it('selects the tapped locked level once the Full Version is bought', () => {
+    const h = modeHarness();
+    const reasons: string[] = [];
+    h.host.openPaywall = (r: string) => reasons.push(r);
+    const mode = createVersusMode(h.host as unknown as VersusModeHost);
+    h.store.set({ screen: 'versusSetup', fullVersion: false });
+    const before = h.store.get().versusSetup.level;
+    mode.actions.selectLevel(4);
+    expect(reasons).toEqual(['versus']);
+    expect(h.store.get().versusSetup.level).toBe(before);
+    h.store.set({ fullVersion: true });
+    expect(h.store.get().versusSetup.level).toBe(4);
+  });
+
+  it('a later pick forgets the locked level', () => {
+    const h = modeHarness();
+    h.host.openPaywall = () => undefined;
+    const mode = createVersusMode(h.host as unknown as VersusModeHost);
+    h.store.set({ screen: 'versusSetup', fullVersion: false });
+    mode.actions.selectLevel(5);
+    mode.actions.selectLevel(1);
+    h.store.set({ fullVersion: true });
+    expect(h.store.get().versusSetup.level).toBe(1);
+  });
+});

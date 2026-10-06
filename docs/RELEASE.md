@@ -297,7 +297,7 @@ vásárlás (`setNextOutcome('cancelled' | 'pending' | 'failed')`) és a vissza�
 | Data safety / App Privacy / IARC / Apple Age Rating válaszok | `docs/store-privacy-answers.md` | Play → *App content*; App Store → *App Privacy*, *Age Rating* |
 | Screenshotok (keretezett, feliratos) | `store/screenshots/<cél>/<nyelv>/NN-név.png` | lásd lent |
 | Ikon, Play kiemelt kép | `store/*.png` (4. fejezet) | mindkét konzol |
-| Weboldal: főoldal, adatvédelem, támogatás (EN + HU) | `docs/site/` | GitHub Pages |
+| Weboldal: főoldal, adatvédelem, támogatás (EN + HU) | `docs/site/` (forrás) → `DanielArpadfalvi/swaplight-site` | GitHub Pages (külön publikus repó) |
 
 **Screenshot-célok:**
 
@@ -334,28 +334,47 @@ STORE_COMPOSE_ONLY=1 npm run store:screens         # csak újrakeretezés (felir
 - Szoftveres WebGL miatt lassú; a betűtípus az Inter (ha a gépen nincs, rendszerbetűre esik vissza).
   Újragenerálás után **nézd át a képeket**.
 
-### 6.3 Weboldal (adatvédelmi nyilatkozat, támogatás) – GitHub Pages
+### 6.3 Weboldal (adatvédelmi nyilatkozat, támogatás) – külön publikus repó
 
-Egyszeri beállítás: GitHub → a repó → *Settings → Pages → Build and deployment → Source:*
-**GitHub Actions**. Utána a `.github/workflows/pages.yml` minden olyan pushnál, ami a
-`docs/site/`-ot érinti az alapértelmezett ágon, kiteszi az oldalt; kézzel is indítható
-(*Actions → Pages → Run workflow*).
+A játék repója privát, ezért a weboldal **nem innen** megy ki: a GitHub Pages a külön, **publikus**
+`DanielArpadfalvi/swaplight-site` repóból szolgálja ki (alapértelmezett ág gyökeréből). Az oldal
+forrása (*source of truth*) továbbra is itt a `docs/site/` mappa – mindig itt szerkeszd, és innen
+másold át.
 
-**Mielőtt élesbe megy:** a `docs/site/*.html` fájlokban cseréld a `CONTACT_EMAIL` helyőrzőt a
-valódi támogatási címre (pl. `sed -i 's/CONTACT_EMAIL/te@pelda.hu/g' docs/site/*.html`), és ha
-megvan, írd be a store-linkeket az `index.html` jelvényeibe.
+Egyszeri beállítás:
 
-URL-ek (a repó nevéből: `DanielArpadfalvi/swaplight`; ha átnevezed a repót vagy saját domaint
-állítasz be, ezek is változnak):
+1. Hozd létre a publikus `DanielArpadfalvi/swaplight-site` repót (üresen, `main` ággal).
+2. A site repóban: *Settings → Pages → Build and deployment → Source:* **Deploy from a branch**,
+   ág: **main**, mappa: **/ (root)** → *Save*. Pár perc múlva él a
+   `https://danielarpadfalvi.github.io/swaplight-site/` cím.
+
+Frissítés (minden `docs/site/` módosítás után):
+
+```bash
+git clone https://github.com/DanielArpadfalvi/swaplight-site.git ../swaplight-site   # első alkalommal
+scripts/publish-site.sh ../swaplight-site       # docs/site/* → a site repó gyökerébe (+ .nojekyll)
+cd ../swaplight-site
+git add -A && git commit -m "Update site" && git push
+```
+
+A szkript csak másol (a célmappa `.git`-jét és a `docs/site`-ban nem szereplő saját fájlokat,
+pl. `README.md`, `CNAME`, nem törli); a commit és a push kézi lépés.
+
+Támogatási cím: **swaplight.support@gmail.com** (a `docs/site/*.html`-ben, a játékban:
+`SUPPORT_EMAIL` a `src/game/links.ts`-ben – Beállítások → Névjegy → Kapcsolat). Ha megvannak a
+store-linkek, írd be őket az `index.html` jelvényeibe.
+
+URL-ek (a site repó nevéből: `DanielArpadfalvi/swaplight-site`; ha átnevezed a repót vagy saját
+domaint állítasz be, ezek is változnak – és a `src/game/links.ts` `SITE` konstansa is):
 
 | Mező | URL |
 |---|---|
-| Privacy Policy URL (App Store *App Privacy*, Play *App content → Privacy policy*) | `https://danielarpadfalvi.github.io/swaplight/privacy.html` |
-| Support URL (App Store) | `https://danielarpadfalvi.github.io/swaplight/support.html` |
-| Marketing URL (App Store, opcionális) / Website (Play) | `https://danielarpadfalvi.github.io/swaplight/` |
-| Contact e-mail (Play *Store settings*) | a `CONTACT_EMAIL` helyére írt cím |
+| Privacy Policy URL (App Store *App Privacy*, Play *App content → Privacy policy*) | `https://danielarpadfalvi.github.io/swaplight-site/privacy.html` |
+| Support URL (App Store) | `https://danielarpadfalvi.github.io/swaplight-site/support.html` |
+| Marketing URL (App Store, opcionális) / Website (Play) | `https://danielarpadfalvi.github.io/swaplight-site/` |
+| Contact e-mail (Play *Store settings*) | `swaplight.support@gmail.com` |
 
 Az oldal a böngésző nyelve szerint vált magyarra/angolra; fixen: `privacy.html?lang=hu`.
-A játékon belüli jogi linkek (Teljes verzió ablak: `LEGAL_URLS` a `src/game/paywall.ts`-ben)
+A játékon belüli jogi linkek (Teljes verzió ablak, beállítások: `src/game/links.ts`)
 ugyanezeket az URL-eket használják. A játékon belüli adatvédelmi szöveg (`about.privacyBody*` az
 i18n-ben) egyezzen a nyilatkozattal (RevenueCat: vásárlási előzmény, lásd 5.5).

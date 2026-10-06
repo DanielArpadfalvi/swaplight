@@ -22,3 +22,24 @@ export function useFitText<T extends HTMLElement>(text: string, max: number, min
   }, [el, text, max, min]);
   return setEl;
 }
+
+/**
+ * Callback ref for a one-word label whose font size comes from CSS: when the word is wider than its
+ * box, the font shrinks (down to `minRatio` of the CSS size) instead of breaking inside the word.
+ * Re-measured on every render, so CSS changes (larger text setting, language) are picked up.
+ */
+export function useFitWord<T extends HTMLElement>(minRatio = 0.7) {
+  const [el, setEl] = useState<T | null>(null);
+  useLayoutEffect(() => {
+    if (!el) return;
+    el.style.fontSize = '';
+    const base = parseFloat(getComputedStyle(el).fontSize) || 0;
+    const avail = el.clientWidth;
+    const need = el.scrollWidth;
+    if (base > 0 && avail > 0 && need > avail) {
+      const size = Math.max(base * minRatio, Math.floor((base * avail * 10) / need) / 10);
+      el.style.fontSize = `${size}px`;
+    }
+  });
+  return setEl;
+}

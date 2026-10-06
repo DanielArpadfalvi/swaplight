@@ -258,6 +258,31 @@ export interface PopupOptions {
   life?: number;
   /** Pixels risen over the lifetime. Default 48. */
   rise?: number;
+  /**
+   * Horizontal bounds (same space as `x`) the label must stay inside: long labels are scaled down
+   * to fit the width and the center is clamped so neither edge leaves the range.
+   */
+  minX?: number;
+  maxX?: number;
+}
+
+/**
+ * Fit a centered label of local width `width` drawn at `scale` into [minX, maxX]: shrink the scale
+ * when it is wider than the range, then clamp the center so both edges stay inside. The pop-in
+ * overshoot never exceeds the resting scale, so the resting scale bounds the drawn width.
+ */
+export function fitPopup(
+  x: number,
+  width: number,
+  scale: number,
+  minX: number,
+  maxX: number,
+): { x: number; scale: number } {
+  const span = maxX - minX;
+  if (!(span > 0) || !(width > 0)) return { x, scale };
+  const s = width * scale > span ? span / width : scale;
+  const half = (width * s) / 2;
+  return { x: Math.max(minX + half, Math.min(maxX - half, x)), scale: s };
 }
 
 interface Popup {
@@ -324,6 +349,12 @@ export class FloatingTextPool extends Container {
     p.rise = options.rise ?? 48;
     p.scale = options.scale ?? 0.5;
     p.x = x;
+    const { minX, maxX } = options;
+    if (minX !== undefined && maxX !== undefined) {
+      const fit = fitPopup(x, p.core.width, p.scale, minX, maxX);
+      p.x = fit.x;
+      p.scale = fit.scale;
+    }
     p.y = y;
     p.root.visible = true;
     // Newest on top.

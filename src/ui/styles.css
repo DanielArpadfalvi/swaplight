@@ -910,6 +910,15 @@ button {
   border: 1px solid rgba(154, 148, 196, 0.35);
 }
 
+/* Larger text: the lock badge alone, so the mode name keeps its room. */
+.large-text .mode-title-row .pill-lock .pill-text {
+  display: none;
+}
+
+.large-text .mode-title-row .pill-lock {
+  padding: 4px 6px;
+}
+
 /* Narrow phones: the lock badge alone, so the mode name keeps its room. */
 @media (max-width: 400px) {
   .mode-title-row .pill-lock .pill-text {
@@ -987,7 +996,14 @@ button {
   background: rgba(30, 200, 255, 0.14);
 }
 
+.bar-btn {
+  min-width: 0;
+}
+
 .bar-label {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
   font-size: calc(10px * var(--fs, 1));
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -1176,6 +1192,11 @@ button {
 .row-button {
   cursor: pointer;
   touch-action: manipulation;
+}
+
+.row-link {
+  color: inherit;
+  text-decoration: none;
 }
 
 .row-button:active {
@@ -1617,10 +1638,11 @@ button {
   max-width: 100%;
   font-size: calc(11px * var(--fs, 1));
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   text-transform: uppercase;
-  overflow-wrap: break-word;
-  hyphens: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
   line-height: 1.1;
 }
 

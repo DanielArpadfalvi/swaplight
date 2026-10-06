@@ -103,7 +103,6 @@ export class BlockTextureFactory {
    * Gradients used while baking. They stay alive until `clear()`: destroying them right after
    * `generateTexture` trips Pixi's "destroyed while still bound" warning.
    */
-  private disposables: { destroy(): void }[] = [];
   private palette: Palette;
   private resolution: number;
 
@@ -193,7 +192,7 @@ export class BlockTextureFactory {
    */
   clear(): void {
     deferDestroy(this.retired);
-    const doomed: { destroy(): void }[] = [...this.disposables];
+    const doomed: { destroy(): void }[] = [];
     for (const set of this.cache.values()) {
       doomed.push(
         { destroy: () => set.body.destroy(true) },
@@ -202,7 +201,6 @@ export class BlockTextureFactory {
     }
     this.cache.clear();
     this.fast = [];
-    this.disposables = [];
     this.retired = doomed;
   }
 
@@ -220,16 +218,14 @@ export class BlockTextureFactory {
     const colors = this.colorsFor(req.kind, req.color ?? 0, state);
     const pad = blockGlowPadding(size);
 
-    const disposables: { destroy(): void }[] = [];
     const bodyRoot = new Container();
-    this.drawTile(bodyRoot, req.kind, req.color ?? 0, state, size, colors, disposables);
+    this.drawTile(bodyRoot, req.kind, req.color ?? 0, state, size, colors);
     const body = this.bake(bodyRoot, new Rectangle(0, 0, size, size));
 
     const glowRoot = new Container();
-    this.drawGlow(glowRoot, req.kind, size, pad, colors, disposables);
+    this.drawGlow(glowRoot, req.kind, size, pad, colors);
     const glow = this.bake(glowRoot, new Rectangle(-pad, -pad, size + 2 * pad, size + 2 * pad));
 
-    this.disposables.push(...disposables);
     return { body, glow, glowPadding: pad, size };
   }
 
@@ -315,7 +311,6 @@ export class BlockTextureFactory {
     state: BlockState,
     s: number,
     c: TileColors,
-    disposables: { destroy(): void }[],
   ): void {
     const radius = s * 0.2;
     const rimW = Math.max(1.5, s * 0.062);
@@ -326,14 +321,11 @@ export class BlockTextureFactory {
     root.addChild(g);
 
     // 1) Neon rim: bright gradient rounded square (lit from the top).
-    const rimGrad = linear(
-      [
-        [0, c.rimHighlight],
-        [0.35, c.rim],
-        [1, scaleColor(c.rim, state === 'flash' ? 1 : 0.72)],
-      ],
-      disposables,
-    );
+    const rimGrad = linear([
+      [0, c.rimHighlight],
+      [0.35, c.rim],
+      [1, scaleColor(c.rim, state === 'flash' ? 1 : 0.72)],
+    ]);
     g.roundRect(0, 0, s, s, radius).fill(rimGrad);
 
     // 2) Recessed face.
@@ -345,32 +337,22 @@ export class BlockTextureFactory {
             state === 'flash' ? mixColor(b.base, WHITE, 0.6) : b.base,
           ] as const,
       );
-      const rainbow = new FillGradient({
-        type: 'linear',
-        start: { x: 0, y: 0 },
-        end: { x: 1, y: 1 },
-        colorStops: stops.map(([offset, col]) => ({ offset, color: col })),
-        textureSpace: 'local',
-      });
-      disposables.push(rainbow);
+      const rainbow = sharedGradient(
+        { x: 1, y: 1 },
+        stops.map(([offset, col]) => ({ offset, color: col })),
+      );
       g.roundRect(rimW, rimW, inner, inner, innerR).fill(rainbow);
       // Darken the lower half so the white sparkle keeps contrast.
-      const shade = linear(
-        [
-          [0, 0x000000, 0],
-          [1, 0x000000, state === 'flash' ? 0.1 : 0.45],
-        ],
-        disposables,
-      );
+      const shade = linear([
+        [0, 0x000000, 0],
+        [1, 0x000000, state === 'flash' ? 0.1 : 0.45],
+      ]);
       g.roundRect(rimW, rimW, inner, inner, innerR).fill(shade);
     } else {
-      const face = linear(
-        [
-          [0, c.faceTop],
-          [1, c.faceBottom],
-        ],
-        disposables,
-      );
+      const face = linear([
+        [0, c.faceTop],
+        [1, c.faceBottom],
+      ]);
       g.roundRect(rimW, rimW, inner, inner, innerR).fill(face);
     }
 
@@ -394,13 +376,10 @@ export class BlockTextureFactory {
     deco
       .roundRect(rimW, rimW, inner, inner, innerR)
       .stroke({ width: Math.max(1, s * 0.022), color: 0x000000, alpha: 0.35, alignment: 1 });
-    const sheen = linear(
-      [
-        [0, WHITE, state === 'flash' ? 0.35 : 0.22],
-        [1, WHITE, 0],
-      ],
-      disposables,
-    );
+    const sheen = linear([
+      [0, WHITE, state === 'flash' ? 0.35 : 0.22],
+      [1, WHITE, 0],
+    ]);
     deco
       .roundRect(rimW * 1.6, rimW * 1.4, inner - rimW * 1.2, inner * 0.42, innerR * 0.8)
       .fill(sheen);
@@ -436,13 +415,10 @@ export class BlockTextureFactory {
     if (state === 'normal' && symbolKind !== 'bomb') {
       // Glyph lit from above: white-hot top fading into the pale hue.
       sym.fill(
-        linear(
-          [
-            [0, mixColor(c.symbol, WHITE, 0.75)],
-            [1, mixColor(c.symbol, c.rim, 0.12)],
-          ],
-          disposables,
-        ),
+        linear([
+          [0, mixColor(c.symbol, WHITE, 0.75)],
+          [1, mixColor(c.symbol, c.rim, 0.12)],
+        ]),
       );
     } else {
       sym.fill(c.symbol);
@@ -450,28 +426,14 @@ export class BlockTextureFactory {
     if (symbolKind === 'bomb') drawBombDetail(sym, cx, cy, r, c, state, this.palette);
   }
 
-  private drawGlow(
-    root: Container,
-    kind: BlockKind,
-    s: number,
-    pad: number,
-    c: TileColors,
-    disposables: { destroy(): void }[],
-  ): void {
+  private drawGlow(root: Container, kind: BlockKind, s: number, pad: number, c: TileColors): void {
     const g = new Graphics();
     if (kind === 'wild') {
       const stops = this.palette.blocks.map((b, i, all) => ({
         offset: i / (all.length - 1),
         color: b.base,
       }));
-      const rainbow = new FillGradient({
-        type: 'linear',
-        start: { x: 0, y: 0 },
-        end: { x: 1, y: 1 },
-        colorStops: stops,
-        textureSpace: 'local',
-      });
-      disposables.push(rainbow);
+      const rainbow = sharedGradient({ x: 1, y: 1 }, stops);
       g.roundRect(-s * 0.02, -s * 0.02, s * 1.04, s * 1.04, s * 0.22).fill({
         fill: rainbow,
         alpha: c.glowAlpha,
@@ -493,29 +455,100 @@ export class BlockTextureFactory {
   }
 }
 
-/** Destroy GPU resources a few frames later, once no bind group references them any more. */
+interface DeferredBatch {
+  items: readonly { destroy(): void }[];
+  /** Destroy once this many frames have been rendered… */
+  frame: number;
+  /** …and this time (ms, performance.now) has passed. */
+  at: number;
+}
+
+const deferred: DeferredBatch[] = [];
+let renderedFrames = 0;
+let frameHooked = false;
+
+function flushDeferred(): void {
+  const now = performance.now();
+  for (let i = deferred.length - 1; i >= 0; i--) {
+    const d = deferred[i]!;
+    if (renderedFrames < d.frame || now < d.at) continue;
+    deferred.splice(i, 1);
+    for (const item of d.items) item.destroy();
+  }
+}
+
+/**
+ * Count rendered frames of `renderer` for {@link deferDestroy}. Pixi's pooled batch bind groups
+ * keep referencing the last textures drawn until a later frame reuses them, so destroying after a
+ * fixed delay alone still warns ("destroyed while still bound") when nothing was rendered in
+ * between (paused / backgrounded app, frozen test rendering).
+ */
+export function attachDeferredDestroy(renderer: {
+  runners: { postrender: { add(item: { postrender(): void }): unknown } };
+}): void {
+  if (frameHooked) return;
+  frameHooked = true;
+  renderer.runners.postrender.add({
+    postrender() {
+      renderedFrames++;
+      if (deferred.length > 0) flushDeferred();
+    },
+  });
+}
+
+/**
+ * Destroy GPU resources later, once no bind group references them any more: after a few rendered
+ * frames (when a renderer is attached) and at least `delayMs`.
+ */
 export function deferDestroy(items: readonly { destroy(): void }[], delayMs = 250): void {
   if (items.length === 0) return;
-  setTimeout(() => {
-    for (const item of items) item.destroy();
-  }, delayMs);
+  if (!frameHooked) {
+    setTimeout(() => {
+      for (const item of items) item.destroy();
+    }, delayMs);
+    return;
+  }
+  deferred.push({ items, frame: renderedFrames + 3, at: performance.now() + delayMs });
 }
 
 type Stop = readonly [offset: number, color: number, alpha?: number];
 
-function linear(stops: readonly Stop[], disposables: { destroy(): void }[]): FillGradient {
-  const grad = new FillGradient({
-    type: 'linear',
-    start: { x: 0, y: 0 },
-    end: { x: 0, y: 1 },
-    colorStops: stops.map(([offset, color, alpha]) => ({
+const gradientCache = new Map<string, FillGradient>();
+
+/**
+ * Shared, never-destroyed linear gradient (local texture space). Gradients only feed the
+ * `generateTexture` bakes, so a pooled batch bind group may still reference one long after the
+ * bake; destroying it then makes Pixi warn ("destroyed while still bound"). They are tiny and the
+ * set of distinct stops is bounded by the palettes, so they are cached for the app's lifetime and
+ * shared across texture generations.
+ */
+export function sharedGradient(
+  end: { x: number; y: number },
+  colorStops: readonly { offset: number; color: number | string }[],
+): FillGradient {
+  const key = `${end.x},${end.y}|${colorStops.map((c) => `${c.offset}:${c.color}`).join(';')}`;
+  let grad = gradientCache.get(key);
+  if (!grad) {
+    grad = new FillGradient({
+      type: 'linear',
+      start: { x: 0, y: 0 },
+      end,
+      colorStops: colorStops.map((c) => ({ ...c })),
+      textureSpace: 'local',
+    });
+    gradientCache.set(key, grad);
+  }
+  return grad;
+}
+
+function linear(stops: readonly Stop[]): FillGradient {
+  return sharedGradient(
+    { x: 0, y: 1 },
+    stops.map(([offset, color, alpha]) => ({
       offset,
       color: alpha === undefined ? color : rgba(color, alpha),
     })),
-    textureSpace: 'local',
-  });
-  disposables.push(grad);
-  return grad;
+  );
 }
 
 function rgba(color: number, alpha: number): string {

@@ -197,7 +197,9 @@ export function DailyResultScreen({ state, actions, leaving }: Props) {
   const r = state.dailyResult;
   const score = useCountUp(r?.score ?? 0, 900);
   if (!r) return null;
-  const max = Math.max(1, ...r.history.map((h) => h.score ?? 0));
+  // Practice bests are drawn as ghost bars, so a practice new best is never a short bar.
+  const max = Math.max(1, ...r.history.map((h) => Math.max(h.score ?? 0, h.practice)));
+  const pct = (v: number): string => `${Math.max(8, Math.round((100 * v) / max))}%`;
   return (
     <div
       class={`overlay overlay-dim daily-result${leaving ? ' is-leaving' : ''}`}
@@ -234,17 +236,22 @@ export function DailyResultScreen({ state, actions, leaving }: Props) {
         <div class="daily-history" data-testid="daily-history">
           <span class="section-title">{t('daily.history')}</span>
           <div class="daily-bars">
-            {r.history.map((h, i) => (
-              <span
-                key={h.date}
-                class={`daily-bar${h.score === null ? ' is-empty' : ''}${h.date === r.date ? ' is-today' : ''}`}
-                title={`${h.date}: ${h.score === null ? '—' : fmt(h.score)}`}
-                style={{
-                  '--h': `${h.score === null ? 0 : Math.max(8, Math.round((100 * h.score) / max))}%`,
-                  animationDelay: `${120 + i * 30}ms`,
-                }}
-              />
-            ))}
+            {r.history.map((h, i) => {
+              const ghost = h.practice > (h.score ?? 0);
+              const value = ghost ? h.practice : h.score;
+              return (
+                <span
+                  key={h.date}
+                  class={`daily-bar${value === null ? ' is-empty' : ''}${ghost ? ' is-practice' : ''}${h.date === r.date ? ' is-today' : ''}`}
+                  title={`${h.date}: ${h.score === null ? '—' : fmt(h.score)}${h.practice > 0 ? ` (${t('daily.unofficial')}: ${fmt(h.practice)})` : ''}`}
+                  style={{
+                    '--h': value === null ? '0%' : pct(value),
+                    '--o': ghost && h.score !== null ? pct(h.score) : '0%',
+                    animationDelay: `${120 + i * 30}ms`,
+                  }}
+                />
+              );
+            })}
           </div>
         </div>
         {state.canShare && (

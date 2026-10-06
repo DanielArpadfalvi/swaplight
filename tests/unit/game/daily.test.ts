@@ -166,8 +166,15 @@ describe('daily bookkeeping', () => {
     expect(keys[0]).toBe('2026-09-26');
     const history = dailyHistory(save, '2026-10-10');
     expect(history).toHaveLength(DAILY_HISTORY_DAYS);
-    expect(history[history.length - 1]).toEqual({ date: '2026-10-10', score: null });
-    expect(history[history.length - 2]).toEqual({ date: '2026-10-09', score: 119 });
+    expect(history[history.length - 1]).toEqual({ date: '2026-10-10', score: null, practice: 0 });
+    expect(history[history.length - 2]).toEqual({ date: '2026-10-09', score: 119, practice: 0 });
+    // A practice best (e.g. a new best in practice after the official run) is reported too.
+    finishDailyAttempt(save, '2026-10-10', 500, false);
+    expect(dailyHistory(save, '2026-10-10').at(-1)).toEqual({
+      date: '2026-10-10',
+      score: null,
+      practice: 500,
+    });
   });
 
   it('sanitizes the streak and old-format daily entries', () => {

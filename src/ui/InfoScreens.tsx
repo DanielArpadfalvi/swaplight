@@ -5,7 +5,7 @@ import { versionLabel } from '../core/version';
 import { deckAvailable } from '../game/runUnlocks';
 import type { GameActions, GameUiState } from '../game/state';
 import { t, type TranslationKey } from '../i18n';
-import { longestWord } from './fit';
+import { longestWord, useFitWord } from './fit';
 import { PRIVACY_URL } from '../game/links';
 import { IconExternal, IconLock } from './icons';
 import { CharmIcon, CurseIcon, DeckGlyph, RelicIcon } from './run/runIcons';
@@ -142,7 +142,7 @@ export function CollectionScreen({ state, actions, leaving, z }: Props & { state
             data-testid={`collection-tab-${k}`}
             onClick={() => pick(k)}
           >
-            <span class="col-tab-label">{t(TAB_LABEL[k])}</span>
+            <TabLabel text={t(TAB_LABEL[k])} />
             <span class="col-tab-count" data-testid={`collection-count-${k}`}>
               {count(k)}/{lists[k].length}
             </span>
@@ -331,5 +331,15 @@ export function ExitDialog({ actions, leaving, z }: Props) {
         </button>
       </div>
     </div>
+  );
+}
+
+/** Collection tab label: one word, shrunk to fit rather than broken mid-word ("TALIZMÁNO-K"). */
+function TabLabel({ text }: { text: string }) {
+  const ref = useFitWord<HTMLSpanElement>(0.72);
+  return (
+    <span class="col-tab-label" ref={ref}>
+      {text}
+    </span>
   );
 }

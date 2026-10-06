@@ -205,7 +205,7 @@ export interface DailyResultUi {
   /** Official score of the day (null = not played officially). */
   todayScore: number | null;
   practiceBest: number;
-  history: { date: string; score: number | null }[];
+  history: { date: string; score: number | null; practice: number }[];
   shareText: string;
 }
 

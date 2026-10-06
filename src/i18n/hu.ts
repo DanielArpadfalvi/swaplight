@@ -73,6 +73,7 @@ export const hu: Dictionary = {
     restoring: 'Visszaállítás…',
     restoreFailed: 'Nem sikerült elérni az áruházat. Próbáld újra később.',
     credits: 'Készítők',
+    contact: 'Kapcsolat (e-mail)',
     privacy: 'Adatvédelem',
     version: 'Verzió',
   },

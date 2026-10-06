@@ -42,7 +42,7 @@ ezekhez nem fér hozzá. Hirdetési azonosítót (IDFA/AAID) nem kérünk, ATT-p
 |---|---|
 | Does your app collect or share any of the required user data types? | **Yes** |
 | Is all of the user data collected by your app encrypted in transit? | **Yes** (HTTPS) |
-| Do you provide a way for users to request that their data is deleted? | **Yes** – e-mailben (CONTACT_EMAIL); a RevenueCat-ben a „customer” törölhető. Lásd az adatvédelmi nyilatkozatot. |
+| Do you provide a way for users to request that their data is deleted? | **Yes** – e-mailben (swaplight.support@gmail.com); a RevenueCat-ben a „customer” törölhető. Lásd az adatvédelmi nyilatkozatot. |
 | Account creation | **My app does not allow users to create an account** |
 | Independent security review | nem kötelező, hagyd üresen / No |
 | UPI / Families | nem releváns |
