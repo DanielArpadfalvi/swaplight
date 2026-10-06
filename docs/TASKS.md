@@ -7,9 +7,9 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 - [x] **T0.2 CI** – `.github/workflows/ci.yml`: node 22, npm ci, check, build, e2e. AC: valid YAML, mirrors local commands.
 
 ## M1 – Core engine (`src/core`)
-- [ ] **T1.1 RNG + board model** – seeded PRNG (sfc32/mulberry32), board 6×12 + preview row, block states (idle, swapping, hovering, falling, landing, flashing/clearing, garbage), board generation without initial matches.
-- [ ] **T1.2 Simulation** – fixed tick: swap (incl. swap into empty), hover/fall/gravity, match detection (h+v, ≥3), flash→clear timings, combo, chain tracking (chain flag on blocks), rise (auto + manual), stop-time after combos/chains, danger/top-out game over with grace. Event stream (matched, cleared, chain, combo, landed, swapped, gameOver) for render/audio.
-- [ ] **T1.3 Scoring & replay** – base × mult scoring hooks (extensible for relics), input log + replay; tests: determinism (same seed+inputs ⇒ same state hash), chain/combo scenarios.
+- [x] **T1.1 RNG + board model** – seeded PRNG (sfc32/mulberry32), board 6×12 + preview row, block states (idle, swapping, hovering, falling, landing, flashing/clearing, garbage), board generation without initial matches.
+- [x] **T1.2 Simulation** – fixed tick: swap (incl. swap into empty), hover/fall/gravity, match detection (h+v, ≥3), flash→clear timings, combo, chain tracking (chain flag on blocks), rise (auto + manual), stop-time after combos/chains, danger/top-out game over with grace. Event stream (matched, cleared, chain, combo, landed, swapped, gameOver) for render/audio.
+- [x] **T1.3 Scoring & replay** – base × mult scoring hooks (extensible for relics), input log + replay; tests: determinism (same seed+inputs ⇒ same state hash), chain/combo scenarios.
 
 ## M2 – Playable prototype
 - [ ] **T2.1 Renderer** – Pixi board view with interpolation from core state, neon block shapes per color, preview row dimmed, rise offset smooth.
