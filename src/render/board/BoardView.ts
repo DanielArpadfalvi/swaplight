@@ -3,7 +3,7 @@ import type { Renderer } from 'pixi.js';
 import { MOD_HIDDEN_COLOR } from '../../core/run/keys';
 import { MOD_LOCKED_COLUMNS, MOD_SWAP_LOCK_UNTIL, riseFraction } from '../../core/sim';
 import type { BlockKind as CoreBlockKind, CellRef, SimState } from '../../core/types';
-import { blockRenderPos, dangerColumns } from '../../core/view';
+import { blockRenderPos, dangerColumns, slabRenderPositions } from '../../core/view';
 import {
   BlockTextureFactory,
   blockGlowPadding,
@@ -12,6 +12,7 @@ import {
   type BlockTextureSet,
 } from '../style/blockTextures';
 import { mixColor } from '../style/colorMath';
+import { GarbageSlabTextures } from '../style/garbageTextures';
 import { NEON_PALETTE, type Palette } from '../style/palette';
 import type { GameLayout } from './layout';
 import { PositionTrack } from './interp';
@@ -41,6 +42,18 @@ const TEX_KIND: Record<CoreBlockKind, TexKind> = {
 
 /** Matched blocks alternate normal / white-hot every N ticks. */
 const FLASH_PERIOD_TICKS = 3;
+
+/** Blocks freed from a garbage slab pop in over this many seconds. */
+const EMERGE_SECONDS = 0.32;
+
+interface SlabSprite {
+  glow: Sprite;
+  body: Sprite;
+  seen: number;
+}
+
+/** Slab ids share the position track with block ids: negative keys. */
+const slabKey = (id: number): number => -id;
 
 /**
  * Pixi view of the board. Reads the sim (never mutates it), tracks sprites by block id with a pool
@@ -73,6 +86,20 @@ export class BoardView extends Container {
   private fadeGradient: FillGradient | null = null;
   private frameGradient: FillGradient | null = null;
 
+  readonly slabTextures: GarbageSlabTextures;
+  private readonly slabGlowLayer = new Container();
+  private readonly slabLayer = new Container();
+  /** Conversion sweep / sparks over converting slabs. */
+  private readonly slabFx = new Graphics();
+  private readonly slabs = new Map<number, SlabSprite>();
+  private readonly slabPool: SlabSprite[] = [];
+  /** Ids of the blocks recorded at the last tick (detects blocks freed from garbage). */
+  private knownIds = new Set<number>();
+  private nextKnown = new Set<number>();
+  /** Block id → time (s) it emerged from a slab. */
+  private readonly emerging = new Map<number, number>();
+  /** Frame gradient colors (top, bottom); defaults to the palette accents. */
+  private frameColors: [number, number] | null = null;
   private readonly tiles = new Map<number, Tile>();
   private readonly pool: Tile[] = [];
   private readonly track = new PositionTrack();
@@ -84,8 +111,18 @@ export class BoardView extends Container {
     super();
     this.palette = palette;
     this.textures = new BlockTextureFactory(renderer, { palette });
+    this.slabTextures = new GarbageSlabTextures(renderer, palette);
     this.glowLayer.blendMode = 'add';
-    this.content.addChild(this.glowLayer, this.bodyLayer, this.held);
+    this.slabGlowLayer.blendMode = 'add';
+    this.slabFx.blendMode = 'add';
+    this.content.addChild(
+      this.glowLayer,
+      this.slabGlowLayer,
+      this.bodyLayer,
+      this.slabLayer,
+      this.slabFx,
+      this.held,
+    );
     this.content.mask = this.mask_;
     this.addChild(
       this.well,
@@ -109,7 +146,10 @@ export class BoardView extends Container {
     const sizeChanged = this.layout?.cellSize !== layout.cellSize;
     this.layout = layout;
     this.cols = cols;
-    if (sizeChanged) this.textures.clear();
+    if (sizeChanged) {
+      this.textures.clear();
+      this.slabTextures.clear();
+    }
     this.drawStatic(cols);
   }
 
@@ -118,12 +158,21 @@ export class BoardView extends Container {
     if (palette === this.palette) return;
     this.palette = palette;
     this.textures.setPalette(palette);
+    this.slabTextures.setPalette(palette);
+    this.drawStatic(this.cols);
+  }
+
+  /** Recolor the neon frame (e.g. the CPU's board); null = palette accents. */
+  setFrameColors(colors: [number, number] | null): void {
+    this.frameColors = colors;
     this.drawStatic(this.cols);
   }
 
   /** Forget interpolation history (new game / board replaced). */
   resetTracking(): void {
     this.track.clear();
+    this.knownIds.clear();
+    this.emerging.clear();
   }
 
   /** Record block positions after a simulation step (call after every `step`). */
@@ -132,14 +181,29 @@ export class BoardView extends Container {
     t.begin();
     const { rows, cols } = sim.config;
     const rise = riseFraction(sim);
+    const known = this.knownIds;
+    const next = this.nextKnown;
+    next.clear();
+    const fresh = known.size > 0;
     for (let i = 0; i < sim.cells.length; i++) {
+      const b = sim.cells[i];
+      if (!b || b.kind === 'garbage') continue;
       const p = blockRenderPos(sim, i);
-      if (p) t.set(p.id, p.row - rise, p.col);
+      if (!p) continue;
+      t.set(p.id, p.row - rise, p.col);
+      next.add(b.id);
+      // A board block that did not exist last tick was freed from a garbage slab.
+      if (fresh && !known.has(b.id)) this.emerging.set(b.id, this.time);
     }
     for (let c = 0; c < sim.preview.length && c < cols; c++) {
       const b = sim.preview[c];
-      if (b) t.set(b.id, rows - rise, c);
+      if (!b) continue;
+      t.set(b.id, rows - rise, c);
+      next.add(b.id);
     }
+    for (const s of slabRenderPositions(sim)) t.set(slabKey(s.id), s.row - rise, s.col);
+    this.knownIds = next;
+    this.nextKnown = known;
   }
 
   render(sim: SimState, alpha: number, dt: number, hints: BoardRenderHints): void {
@@ -165,7 +229,7 @@ export class BoardView extends Container {
 
     for (let i = 0; i < sim.cells.length; i++) {
       const b = sim.cells[i];
-      if (!b) continue;
+      if (!b || b.kind === 'garbage') continue;
       const p = blockRenderPos(sim, i);
       if (!p) continue;
       if (p.state === 'popped' && p.popProgress >= 1) continue;
@@ -210,6 +274,20 @@ export class BoardView extends Container {
         scaleX *= 1.07;
         scaleY *= 1.07;
       }
+      const born = this.emerging.get(b.id);
+      if (born !== undefined) {
+        const k = (t - born) / EMERGE_SECONDS;
+        if (k >= 1 || k < 0) {
+          this.emerging.delete(b.id);
+        } else {
+          // Pop out of the slab: small → overshoot → 1, white-hot at first.
+          const e = 1 - Math.pow(1 - k, 3);
+          const s = 0.45 + 0.55 * e + Math.sin(Math.PI * k) * 0.12;
+          scaleX *= s;
+          scaleY *= s;
+          if (k < 0.45 && state === 'normal') state = 'flash';
+        }
+      }
       const x = layout.originX + (sc + 0.5) * cell + dx;
       const y = layout.originY + (sr + 0.5) * cell + dy;
       if (b.id === hints.heldBlockId) heldPos = { x, y };
@@ -249,10 +327,111 @@ export class BoardView extends Container {
       this.pool.push(tile);
     }
 
+    this.renderSlabs(sim, alpha, frame, cell, rise);
+
     this.drawHeld(heldPos, cell);
     this.drawCursor(hints.cursor, rise, cell);
     this.drawDanger(danger, pinned, cell);
     this.drawLocks(sim, cell);
+  }
+
+  /** Garbage slabs: one panel sprite per slab, blinking and swept while converting. */
+  private renderSlabs(
+    sim: SimState,
+    alpha: number,
+    frame: number,
+    cell: number,
+    rise: number,
+  ): void {
+    const layout = this.layout;
+    const fx = this.slabFx;
+    fx.clear();
+    if (!layout) return;
+    if (sim.garbage.length > 0) {
+      for (const s of slabRenderPositions(sim)) {
+        const pos = this.track.get(slabKey(s.id), alpha);
+        const sr = pos ? pos.row : s.row - rise;
+        const sc = pos ? pos.col : s.col;
+        let sprite = this.slabs.get(s.id);
+        if (!sprite) {
+          sprite = this.slabPool.pop() ?? this.newSlab();
+          this.slabs.set(s.id, sprite);
+        }
+        sprite.seen = frame;
+        const converting = s.state === 'converting';
+        const blink = converting && Math.floor(sim.tick / FLASH_PERIOD_TICKS) % 2 === 0;
+        const set = this.slabTextures.get(s.width, s.height, cell, blink ? 'flash' : 'normal');
+        const { body, glow } = sprite;
+        if (body.texture !== set.body) body.texture = set.body;
+        if (glow.texture !== set.glow) glow.texture = set.glow;
+        body.visible = glow.visible = true;
+        const x = layout.originX + sc * cell;
+        let y = layout.originY + sr * cell;
+        let sy = 1;
+        if (s.state === 'landing' && sim.config.landTicks > 0) {
+          // Heavy landing: a short squash anchored to the bottom.
+          const slab = sim.garbage.find((g) => g.id === s.id);
+          const k = slab ? 1 - slab.timer / sim.config.landTicks : 1;
+          sy = 1 - 0.06 * Math.sin(Math.PI * k) * (1 - k * 0.5);
+          y += s.height * cell * (1 - sy);
+        }
+        body.position.set(x, y);
+        body.scale.set(1, sy);
+        glow.position.set(x - set.glowPadding, y - set.glowPadding * sy);
+        glow.scale.set(1, sy);
+        glow.alpha = converting ? 0.7 + 0.3 * Math.sin(this.time * 30) : 1;
+        if (converting) this.drawConversion(fx, x, y, s.width, s.height, cell, s.convertProgress);
+      }
+    }
+    for (const [id, sprite] of this.slabs) {
+      if (sprite.seen === frame) continue;
+      sprite.body.visible = false;
+      sprite.glow.visible = false;
+      this.slabs.delete(id);
+      this.slabPool.push(sprite);
+    }
+  }
+
+  /** A bright scanline sweeping the bottom row (the part that turns into blocks) + sparks. */
+  private drawConversion(
+    g: Graphics,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    cell: number,
+    progress: number,
+  ): void {
+    const accent = this.palette.ui.accent;
+    const rowY = y + (h - 1) * cell;
+    const sweepX = x + progress * w * cell;
+    g.rect(x, rowY + cell * 0.08, Math.max(0, sweepX - x), cell * 0.84).fill({
+      color: 0xffffff,
+      alpha: 0.12 + 0.1 * progress,
+    });
+    g.rect(sweepX - cell * 0.06, rowY + cell * 0.04, cell * 0.12, cell * 0.92).fill({
+      color: accent,
+      alpha: 0.85,
+    });
+    g.rect(sweepX - cell * 0.22, rowY + cell * 0.04, cell * 0.44, cell * 0.92).fill({
+      color: accent,
+      alpha: 0.18,
+    });
+    for (let i = 0; i < 4; i++) {
+      const a = this.time * 9 + i * 1.7;
+      const sx = sweepX + Math.sin(a * 1.3) * cell * 0.25;
+      const sy = rowY + cell * (0.5 + 0.42 * Math.sin(a));
+      g.circle(sx, sy, Math.max(1, cell * 0.05)).fill({ color: 0xffffff, alpha: 0.9 });
+    }
+  }
+
+  private newSlab(): SlabSprite {
+    const glow = new Sprite(Texture.EMPTY);
+    glow.blendMode = 'add';
+    const body = new Sprite(Texture.EMPTY);
+    this.slabGlowLayer.addChild(glow);
+    this.slabLayer.addChild(body);
+    return { glow, body, seen: 0 };
   }
 
   /** Frozen columns (The Lock) and the swap lock (The Stagger): icy overlays with a padlock. */
@@ -487,8 +666,8 @@ export class BoardView extends Container {
       start: { x: 0, y: 0 },
       end: { x: 0, y: 1 },
       colorStops: [
-        { offset: 0, color: pal.ui.accent },
-        { offset: 1, color: pal.ui.accent2 },
+        { offset: 0, color: this.frameColors?.[0] ?? pal.ui.accent },
+        { offset: 1, color: this.frameColors?.[1] ?? pal.ui.accent2 },
       ],
       textureSpace: 'local',
     });
@@ -499,12 +678,12 @@ export class BoardView extends Container {
     this.frame.clear();
     this.frame.roundRect(fx - 4, fy - 4, fw + 8, fh + 8, r + 4).stroke({
       width: 10,
-      color: pal.ui.accent,
+      color: this.frameColors?.[0] ?? pal.ui.accent,
       alpha: 0.1,
     });
     this.frame.roundRect(fx - 1.5, fy - 1.5, fw + 3, fh + 3, r + 1.5).stroke({
       width: 4,
-      color: pal.ui.accent2,
+      color: this.frameColors?.[1] ?? pal.ui.accent2,
       alpha: 0.22,
     });
     this.frame.roundRect(fx, fy, fw, fh, r).stroke({ width: 2.5, fill: this.frameGradient });

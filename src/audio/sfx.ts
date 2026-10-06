@@ -19,7 +19,10 @@ export type SfxId =
   | 'purchase'
   | 'unlock'
   | 'stageClear'
-  | 'bossIntro';
+  | 'bossIntro'
+  | 'garbage'
+  | 'attack'
+  | 'incoming';
 
 export interface SfxRecipe {
   /** Approximate simultaneous voices (oscillators + noise sources). */
@@ -298,6 +301,77 @@ export const SFX: Record<SfxId, SfxRecipe> = {
       kick(v, t + 0.6, 0.9);
       hat(v, t + 1.2, 0.8, true);
       return kick(v, t + 1.2, 1) + 0.9;
+    },
+  },
+  /** Heavy garbage slab landing; `a` = slab cells (bigger = deeper). */
+  garbage: {
+    voices: 4,
+    throttle: 0.08,
+    play(v, t, cells) {
+      const size = clampInt(cells, 1, 36);
+      const k = Math.min(1, size / 18);
+      noise(v, t, {
+        peak: 0.16 + 0.1 * k,
+        decay: 0.12 + 0.1 * k,
+        filter: 'lowpass',
+        freq: 900,
+        freqEnd: 120,
+      });
+      noise(v, t + 0.01, { peak: 0.06, decay: 0.06, filter: 'bandpass', freq: 2400, q: 3 });
+      tone(v, t, {
+        type: 'square',
+        freq: 110 - 30 * k,
+        freqEnd: 40,
+        peak: 0.12,
+        decay: 0.18,
+        cutoff: 600,
+      });
+      return kick(v, t, 0.75 + 0.25 * k);
+    },
+  },
+  /** Outgoing attack: rising zap. */
+  attack: {
+    voices: 3,
+    throttle: 0.06,
+    play(v, t) {
+      noise(v, t, {
+        peak: 0.07,
+        attack: 0.02,
+        decay: 0.22,
+        filter: 'bandpass',
+        freq: 1200,
+        freqEnd: 9000,
+        q: 4,
+      });
+      tone(v, t, {
+        type: 'sawtooth',
+        freq: 220,
+        freqEnd: 1760,
+        glideTime: t + 0.18,
+        peak: 0.08,
+        decay: 0.24,
+        cutoff: 1500,
+        cutoffEnd: 7000,
+      });
+      return tone(v, t + 0.03, {
+        type: 'square',
+        freq: 440,
+        freqEnd: 2640,
+        glideTime: t + 0.2,
+        peak: 0.04,
+        decay: 0.2,
+        cutoff: 5000,
+      });
+    },
+  },
+  /** Incoming garbage warning: two short descending blips. */
+  incoming: {
+    voices: 2,
+    throttle: 0.25,
+    important: true,
+    play(v, t) {
+      tone(v, t, { type: 'square', freq: 988, peak: 0.07, decay: 0.07, cutoff: 3000 });
+      return tone(v, t + 0.09, { type: 'square', freq: 740, peak: 0.07, decay: 0.1, cutoff: 3000 });
     },
   },
 };

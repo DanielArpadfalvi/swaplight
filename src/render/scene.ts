@@ -4,6 +4,7 @@ import { riseFraction } from '../core/sim';
 import { BoardView, type BoardRenderHints } from './board/BoardView';
 import { cellCenter, type GameLayout } from './board/layout';
 import { NeonBackground } from './style/background';
+import { AttackBoltPool, type BoltOptions } from './style/bolts';
 import { mixColor } from './style/colorMath';
 import { FlashOverlay, FloatingTextPool, ParticleBurstPool, ScreenShake } from './style/effects';
 import { NEON_PALETTE, type Palette } from './style/palette';
@@ -23,6 +24,10 @@ export class GameScene {
   private readonly popups: FloatingTextPool;
   private readonly flashOverlay: FlashOverlay;
   private readonly shaker = new ScreenShake(10, 0.012, 1.8);
+  private readonly bolts = new AttackBoltPool();
+  /** Versus: the CPU's mini board (created on first use). */
+  private opponentView: BoardView | null = null;
+  private opponentLayout: GameLayout | null = null;
   private layout: GameLayout | null = null;
   private excitement = 0;
   private palette: Palette = NEON_PALETTE;
@@ -36,7 +41,7 @@ export class GameScene {
     this.particles = new ParticleBurstPool({ seed: 11 });
     this.popups = new FloatingTextPool(16, Math.max(2, app.renderer.resolution));
     this.flashOverlay = new FlashOverlay(width, height);
-    this.world.addChild(this.board, this.particles, this.popups);
+    this.world.addChild(this.board, this.particles, this.popups, this.bolts);
     app.stage.addChild(this.bg, this.world, this.flashOverlay);
   }
 
@@ -79,6 +84,7 @@ export class GameScene {
     this.board.render(sim, alpha, dt, hints);
     this.particles.update(dt);
     this.popups.update(dt);
+    this.bolts.update(dt);
     this.flashOverlay.update(dt);
     const o = this.shaker.update(dt);
     const w = this.app.screen.width;
@@ -136,6 +142,65 @@ export class GameScene {
     });
   }
 
+  /**
+   * Versus: show (layout) or hide (null) the opponent's mini board. It sits in the shaking world,
+   * below the player's effects.
+   */
+  setOpponentLayout(layout: GameLayout | null, cols = 6): void {
+    this.opponentLayout = layout;
+    if (!layout) {
+      if (this.opponentView) this.opponentView.visible = false;
+      return;
+    }
+    if (!this.opponentView) {
+      this.opponentView = new BoardView(this.app.renderer, this.palette);
+      this.opponentView.setFrameColors([0xff8a3d, 0xff3b6b]);
+      this.world.addChildAt(this.opponentView, 1);
+    }
+    this.opponentView.visible = true;
+    this.opponentView.setLayout(layout, cols);
+  }
+
+  get opponent(): BoardView | null {
+    return this.opponentLayout ? this.opponentView : null;
+  }
+
+  renderOpponent(sim: SimState, alpha: number, dt: number): void {
+    this.opponent?.render(sim, alpha, dt, { heldBlockId: null, cursor: null, raising: false });
+  }
+
+  /** Particle burst at a cell of the opponent's mini board. */
+  burstOpponent(sim: SimState, row: number, col: number, color: number): void {
+    const layout = this.opponentLayout;
+    if (!layout) return;
+    const p = cellCenter(layout, row, col, riseFraction(sim));
+    const base = this.palette.blocks[color]?.base ?? 0xffffff;
+    const k = layout.cellSize / 48;
+    this.particles.burst(p.x, p.y, base, {
+      count: this.reduced ? 3 : 7,
+      speed: 230 * k,
+      radius: layout.cellSize * 0.3,
+      scale: 0.85 * k,
+      life: 0.45,
+    });
+  }
+
+  /** Energy bolt between two canvas points (versus attacks). */
+  bolt(x0: number, y0: number, x1: number, y1: number, color: number, opts?: BoltOptions): void {
+    this.bolts.fire(x0, y0, x1, y1, color, opts);
+  }
+
+  /** Sparks at an arbitrary canvas point (bolt impacts, garbage landings). */
+  sparks(x: number, y: number, color: number, count = 10, scale = 1): void {
+    this.particles.burst(x, y, color, {
+      count: this.reduced ? Math.ceil(count * 0.35) : count,
+      speed: 260 * scale,
+      radius: 6 * scale,
+      scale: 0.8 * scale,
+      life: 0.5,
+    });
+  }
+
   shake(amount: number): void {
     this.shaker.add(amount);
   }
@@ -150,6 +215,7 @@ export class GameScene {
   set reducedMotion(on: boolean) {
     this.reduced = on;
     this.shaker.enabled = !on;
+    this.bolts.reduced = on;
   }
 
   get reducedMotion(): boolean {
@@ -161,6 +227,7 @@ export class GameScene {
     if (palette === this.palette) return;
     this.palette = palette;
     this.board.setPalette(palette);
+    this.opponentView?.setPalette(palette);
   }
 
   get paletteName(): string {
@@ -175,6 +242,7 @@ export class GameScene {
   clearEffects(): void {
     this.particles.clear();
     this.popups.clear();
+    this.bolts.clear();
     this.excitement = 0;
   }
 }

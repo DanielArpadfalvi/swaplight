@@ -1,4 +1,5 @@
 import { runContentEn } from './runContent.en';
+import { versusDailyEn } from './versusDaily.en';
 
 /**
  * English source dictionary. Every other language must match its shape
@@ -294,4 +295,5 @@ export const en = {
     soonBody: 'Relics, charms and bosses you discover in Run mode will appear here.',
   },
   ...runContentEn,
+  ...versusDailyEn,
 };

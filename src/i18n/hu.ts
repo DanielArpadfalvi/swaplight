@@ -1,5 +1,6 @@
 import type { Dictionary } from './dictionary';
 import { runContentHu } from './runContent.hu';
+import { versusDailyHu } from './versusDaily.hu';
 
 /**
  * Hungarian dictionary. A számnév után a főnév egyes számban áll
@@ -295,4 +296,5 @@ export const hu: Dictionary = {
     soonBody: 'A Futam módban felfedezett ereklyék, talizmánok és főellenségek itt jelennek meg.',
   },
   ...runContentHu,
+  ...versusDailyHu,
 };

@@ -7,9 +7,11 @@ import { bindKeyboardInput, bindPointerInput } from '../input/dom';
 import { geometryForSim, type BoardGeometry } from '../input/geometry';
 import { createPlatform, type Platform } from '../platform';
 import { cellCenter, computeLayout, readSafeInsets, type GameLayout } from '../render/board/layout';
+import { computeVersusLayout, type VersusLayout } from '../render/board/versusLayout';
 import { GameScene } from '../render/scene';
 import { HIGH_CONTRAST_PALETTE, NEON_PALETTE } from '../render/style/palette';
 import { mountUi } from '../ui/mount';
+import { createDailyMode } from './dailyMode';
 import { feedbackForEvents, musicIntensity, type Feedback } from './feedback';
 import { GameLoop } from './loop';
 import { startMode, type ModeHost } from './modes';
@@ -19,9 +21,13 @@ import { createRunMode } from './runMode';
 import { SaveManager } from './save';
 import { EndlessSession } from './session';
 import { applySettings, sanitizeSettings, type Settings, type SettingsTargets } from './settings';
-import { INITIAL_UI_STATE, type GameActions, type GameUiState } from './state';
+import { INITIAL_UI_STATE, type GameActions, type GameUiState, type PlayMode } from './state';
 import { createStore, type Store } from './store';
 import type { SwaplightTestApi } from './testApi';
+import { createVersusMode } from './versusMode';
+
+/** Board layout flavour (HUD height, versus split). */
+type LayoutMode = PlayMode;
 
 /** Delay between the top-out and the game over panel (lets the flash/shake play). */
 const GAME_OVER_PANEL_DELAY_MS = 750;
@@ -69,6 +75,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     best: save.data.modes.endless?.best ?? 0,
     language: getLanguage(),
     unlocks: [...save.data.unlocks],
+    versusRecords: { ...save.data.versus },
+    canShare: platform.clipboard.available,
   });
   save.subscribe((data) =>
     store.set({
@@ -76,6 +84,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       modeStats: data.modes,
       fullVersion: data.fullVersion,
       unlocks: data.unlocks,
+      versusRecords: data.versus,
+      dailySave: { records: data.daily, streak: data.dailyStreak },
     }),
   );
 
@@ -124,19 +134,49 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
 
   let frozen = false;
   let gameOverTimer: number | undefined;
-  let layoutMode: 'endless' | 'run' = 'endless';
+  let layoutMode: LayoutMode = 'endless';
+  let versusLayout: VersusLayout | null = null;
 
   const relayout = (): void => {
     const { width, height } = scene.app.screen;
     const { rows, cols } = session.sim.config;
-    layout = computeLayout(width, height, readSafeInsets(), {
-      rows,
-      cols,
-      bottomMargin: CONTROLS_HEIGHT,
-      // The Run HUD adds the goal bar and the relic row.
-      ...(layoutMode === 'run' ? { hudFraction: 0.235, minHud: 176, maxHud: 214 } : {}),
-    });
+    const insets = readSafeInsets();
+    if (layoutMode === 'versus') {
+      versusLayout = computeVersusLayout(width, height, insets, {
+        rows,
+        cols,
+        bottomMargin: CONTROLS_HEIGHT,
+      });
+      layout = versusLayout.main;
+      const { mini, queue, miniQueue, card } = versusLayout;
+      store.set({
+        versusLayout: {
+          queue,
+          miniQueue,
+          card,
+          mini: {
+            x: mini.originX - mini.framePad,
+            y: mini.originY - mini.framePad,
+            w: mini.boardWidth + 2 * mini.framePad,
+            h: mini.boardHeight + mini.previewHeight + 2 * mini.framePad,
+          },
+        },
+      });
+    } else {
+      versusLayout = null;
+      layout = computeLayout(width, height, insets, {
+        rows,
+        cols,
+        bottomMargin: CONTROLS_HEIGHT,
+        // The Run / Daily HUD adds the goal bar and the relic / twist row.
+        ...(layoutMode === 'run' || layoutMode === 'daily'
+          ? { hudFraction: 0.235, minHud: 176, maxHud: 214 }
+          : {}),
+      });
+      store.set({ versusLayout: null });
+    }
     scene.setLayout(layout, cols);
+    scene.setOpponentLayout(versusLayout?.mini ?? null, cols);
     store.set({
       controlsTop:
         layout.originY + layout.boardHeight + layout.previewHeight + layout.framePad + 10,
@@ -148,7 +188,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   };
   relayout();
   scene.app.renderer.on('resize', relayout);
-  const setLayoutMode = (mode: 'endless' | 'run'): void => {
+  const setLayoutMode = (mode: LayoutMode): void => {
     layoutMode = mode;
     relayout();
   };
@@ -177,6 +217,9 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
           break;
         case 'excite':
           scene.excite(f.amount);
+          break;
+        case 'garbageBurst':
+          scene.burst(sim, f.row, f.col, f.color, 2);
           break;
         case 'scored':
           if (store.get().settings.showBreakdown || store.get().mode === 'run') {
@@ -231,9 +274,12 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   let lastIntensity = -1;
   const onTick = (): void => {
     if (store.get().screen !== 'playing') return;
+    const mode = store.get().mode;
+    if (mode === 'versus' && !versusMode.opponentSim) return;
     const sim = session.sim;
     if (sim.gameOver) return;
-    const events = session.tick(performance.now());
+    const events =
+      mode === 'versus' ? versusMode.tick(performance.now()) : session.tick(performance.now());
     scene.board.captureTick(sim);
     const nearTop = dangerColumns(sim).length > 0;
     applyFeedback(
@@ -252,7 +298,9 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       audio.setIntensity(intensity);
     }
     publish(sim);
-    if (store.get().mode === 'run') runMode.afterTick(events);
+    if (mode === 'run') runMode.afterTick(events);
+    else if (mode === 'versus') versusMode.afterTick();
+    else if (mode === 'daily') dailyMode.afterTick();
     else if (sim.gameOver) enterGameOver();
   };
 
@@ -273,13 +321,23 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         },
         store.get().screen === 'menu' ? 0 : danger,
       );
+      const opp = versusMode.opponentSim;
+      if (opp && store.get().mode === 'versus') scene.renderOpponent(opp, alpha, dt);
     },
   });
   scene.app.ticker.add((ticker) => loop.frame(ticker.deltaMS));
 
+  /** Leave the mode that owns the board (Run is kept saved, Versus / Daily are closed). */
+  const leaveCurrentMode = (): void => {
+    const mode = store.get().mode;
+    if (mode === 'run') runMode.suspend();
+    else if (mode === 'versus') versusMode.leave();
+    else if (mode === 'daily') dailyMode.leave();
+  };
+
   const startGame = (): void => {
     window.clearTimeout(gameOverTimer);
-    if (store.get().mode === 'run') runMode.suspend();
+    leaveCurrentMode();
     store.set({ mode: 'endless' });
     session.restart(nextSeed());
     setLayoutMode('endless');
@@ -334,8 +392,9 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     loop.pause();
     const sim = session.sim;
     const screen = store.get().screen;
-    if (store.get().mode === 'run') {
-      runMode.suspend();
+    const mode = store.get().mode;
+    if (mode !== 'endless') {
+      leaveCurrentMode();
     } else if ((screen === 'playing' || screen === 'paused') && !sim.gameOver) {
       if (sim.tick >= MIN_RECORDED_TICKS) recordCurrentGame();
     }
@@ -394,9 +453,68 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     toMenu: () => toMenu(),
   });
 
+  const versusMode = createVersusMode({
+    store,
+    save,
+    audio,
+    haptics: platform.haptics,
+    scene,
+    session,
+    loop,
+    isFrozen: () => frozen,
+    showToast: (text) => showToast(text),
+    setLayoutMode,
+    versusLayout: () => versusLayout,
+    resetBoard() {
+      scene.board.resetTracking();
+      scene.board.captureTick(session.sim);
+      scene.clearEffects();
+      loop.reset();
+      lastIntensity = -1;
+      publish(session.sim);
+      store.set({ scoreFlash: null, raiseHeld: false });
+    },
+    randomSeed: nextSeed,
+    toMenu: () => toMenu(),
+  });
+
+  const dailyMode = createDailyMode({
+    store,
+    save,
+    audio,
+    haptics: platform.haptics,
+    scene,
+    session,
+    loop,
+    clipboard: platform.clipboard,
+    isFrozen: () => frozen,
+    showToast: (text) => showToast(text),
+    setLayoutMode,
+    resetBoard() {
+      scene.board.resetTracking();
+      scene.board.captureTick(session.sim);
+      scene.clearEffects();
+      loop.reset();
+      lastIntensity = -1;
+      publish(session.sim);
+      store.set({ scoreFlash: null, raiseHeld: false });
+    },
+    toMenu: () => toMenu(),
+  });
+  // The menu's daily countdown rolls over at midnight.
+  window.setInterval(() => dailyMode.syncToday(), 30_000);
+
   const modeHost: ModeHost = {
     startEndless: () => startGame(),
     startRun: () => runMode.open(),
+    startVersus: () => {
+      leaveCurrentMode();
+      versusMode.open();
+    },
+    startDaily: () => {
+      leaveCurrentMode();
+      dailyMode.open();
+    },
   };
 
   const handleBack = (): void => {
@@ -500,6 +618,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       platform.lifecycle.exitApp();
     },
     run: runMode.actions,
+    versus: versusMode.actions,
+    daily: dailyMode.actions,
   };
 
   bindPointerInput(scene.canvas, session.gesture, () => {
@@ -597,6 +717,9 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       },
     };
     api.run = runMode.testApi;
+    api.versus = versusMode.testApi;
+    api.daily = dailyMode.testApi;
+    api.setFullVersion = (on: boolean) => setFullVersion(on);
     window.__swaplight = api;
   }
 }

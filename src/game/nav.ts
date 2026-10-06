@@ -15,7 +15,12 @@ export type Screen =
   | 'stageIntro'
   | 'stageResult'
   | 'shop'
-  | 'runEnd';
+  | 'runEnd'
+  // Versus CPU / Daily Challenge (play reuses 'playing' / 'paused').
+  | 'versusSetup'
+  | 'versusResult'
+  | 'dailyIntro'
+  | 'dailyResult';
 
 export type Overlay =
   'settings' | 'stats' | 'collection' | 'credits' | 'privacy' | 'exitConfirm' | 'abandonConfirm';
@@ -27,7 +32,10 @@ export function showsBoard(screen: Screen): boolean {
     screen === 'paused' ||
     screen === 'gameOver' ||
     screen === 'stageIntro' ||
-    screen === 'stageResult'
+    screen === 'stageResult' ||
+    screen === 'versusResult' ||
+    screen === 'dailyIntro' ||
+    screen === 'dailyResult'
   );
 }
 
@@ -52,6 +60,10 @@ export function backAction(screen: Screen, overlays: readonly Overlay[]): BackAc
     case 'runMap':
     case 'shop':
     case 'runEnd':
+    case 'versusSetup':
+    case 'versusResult':
+    case 'dailyIntro':
+    case 'dailyResult':
       return { type: 'toMenu' };
     case 'stageIntro':
       return { type: 'toRunMap' };

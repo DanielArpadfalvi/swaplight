@@ -5,6 +5,7 @@ import type { GameActions, GameUiState } from '../game/state';
 import { t } from '../i18n';
 import { IconCollection, IconLock, IconPlay, IconSettings, IconStats, ModeGlyph } from './icons';
 import { useFormat } from './format';
+import { DailyCardInfo } from './modes/DailyScreens';
 
 interface MenuProps {
   state: GameUiState;
@@ -104,6 +105,7 @@ function ModeCard({
           )}
         </span>
         <span class="mode-desc">{t(mode.descKey)}</span>
+        {mode.id === 'daily' && playable && <DailyCardInfo state={state} />}
       </span>
       {playable && (
         <span class="mode-side">

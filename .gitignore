@@ -7,3 +7,4 @@ tests/e2e/__screenshots__
 .vite
 *.log
 .DS_Store
+.claude/worktrees/

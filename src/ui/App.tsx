@@ -21,7 +21,10 @@ import {
   StageResultScreen,
 } from './run/RunScreens';
 import { ShopScreen } from './run/Shop';
+import { DailyHud, DailyIntro, DailyResultScreen } from './modes/DailyScreens';
+import { VersusHud, VersusResultScreen, VersusSetupScreen } from './modes/VersusScreens';
 import './run/run.css';
+import './modes/modes.css';
 
 interface AppProps {
   store: Store<GameUiState>;
@@ -44,7 +47,11 @@ export function App({ store, actions }: AppProps) {
   const ms = rm ? 0 : 220;
   const screen = state.screen;
   const run = state.mode === 'run';
-  const endlessHud = !run && (screen === 'playing' || screen === 'paused' || screen === 'gameOver');
+  const inPlay = screen === 'playing' || screen === 'paused';
+  const endlessHud = state.mode === 'endless' && (inPlay || screen === 'gameOver');
+  const versusHud = state.mode === 'versus' && (inPlay || screen === 'versusResult');
+  const dailyHud =
+    state.mode === 'daily' && (inPlay || screen === 'dailyIntro' || screen === 'dailyResult');
   const runHud =
     run &&
     (screen === 'playing' ||
@@ -67,6 +74,9 @@ export function App({ store, actions }: AppProps) {
       {endlessHud && <RaiseButton state={state} actions={actions} />}
       {runHud && <RunHud state={state} actions={actions} />}
       {runHud && screen !== 'stageResult' && <RunControls state={state} actions={actions} />}
+      {versusHud && <VersusHud state={state} actions={actions} />}
+      {dailyHud && <DailyHud state={state} actions={actions} />}
+      {(versusHud || dailyHud) && inPlay && <RaiseButton state={state} actions={actions} />}
       <Presence when={screen === 'paused'} ms={ms}>
         {(leaving) => <PausePanel run={run} actions={actions} leaving={leaving} />}
       </Presence>
@@ -88,6 +98,18 @@ export function App({ store, actions }: AppProps) {
       </Presence>
       <Presence when={screen === 'runEnd'} ms={ms}>
         {(leaving) => <RunEndScreen state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      <Presence when={screen === 'versusSetup'} ms={ms}>
+        {(leaving) => <VersusSetupScreen state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      <Presence when={screen === 'versusResult'} ms={ms}>
+        {(leaving) => <VersusResultScreen state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      <Presence when={screen === 'dailyIntro'} ms={ms}>
+        {(leaving) => <DailyIntro state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      <Presence when={screen === 'dailyResult'} ms={ms}>
+        {(leaving) => <DailyResultScreen state={state} actions={actions} leaving={leaving} />}
       </Presence>
       {(screen === 'playing' || screen === 'shop') && state.charmMenu !== null && (
         <CharmCard state={state} actions={actions} />

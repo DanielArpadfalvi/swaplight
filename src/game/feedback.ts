@@ -9,7 +9,16 @@ import type { TranslationKey, TranslationParams } from '../i18n';
  */
 
 export type FeedbackSfx =
-  'swap' | 'land' | 'match' | 'pop' | 'chain' | 'combo' | 'rowRise' | 'danger' | 'gameOver';
+  | 'swap'
+  | 'land'
+  | 'match'
+  | 'pop'
+  | 'chain'
+  | 'combo'
+  | 'rowRise'
+  | 'danger'
+  | 'gameOver'
+  | 'garbage';
 
 /** Semantic popup tone; the renderer maps it to a palette color. */
 export type PopupTone = 'chain' | 'combo' | 'score' | 'level';
@@ -26,7 +35,9 @@ export type Feedback =
   /** Momentary background / music excitement (0..1). */
   | { kind: 'excite'; amount: number }
   /** A clear scored: drives the HUD "base × mult" chips. */
-  | { kind: 'scored'; base: number; mult: number; total: number; chain: number; combo: number };
+  | { kind: 'scored'; base: number; mult: number; total: number; chain: number; combo: number }
+  /** Garbage turned into blocks: sparks over the freed cells. */
+  | { kind: 'garbageBurst'; row: number; col: number; color: number };
 
 export interface FeedbackContext {
   /** Sim tick after the step that produced the events. */
@@ -44,6 +55,15 @@ export const DANGER_BEAT_TICKS = 24;
 
 /** Chain level from which the screen shakes. */
 export const SHAKE_MIN_CHAIN = 3;
+
+/** Garbage slabs of at least this many cells land with a heavy thud. */
+export const GARBAGE_HEAVY_CELLS = 12;
+
+/** Screen shake for a landing garbage slab of `cells` cells (0 for small ones). */
+export function garbageShake(cells: number): number {
+  if (cells < 6) return 0;
+  return Math.min(0.75, 0.18 + 0.025 * cells);
+}
 
 /** Haptic strength for a chain level (≥2). */
 export function chainHaptic(chain: number): ImpactStrength {
@@ -166,6 +186,24 @@ export function feedbackForEvents(events: readonly SimEvent[], ctx: FeedbackCont
           tone: 'level',
           scale: 0.6,
         });
+        break;
+      case 'garbageLanded': {
+        const cells = e.width * e.height;
+        out.push(
+          { kind: 'sfx', sfx: 'garbage', a: cells },
+          { kind: 'haptic', strength: cells >= GARBAGE_HEAVY_CELLS ? 'heavy' : 'medium' },
+        );
+        const shake = garbageShake(cells);
+        if (shake > 0) out.push({ kind: 'shake', amount: shake });
+        break;
+      }
+      case 'garbageConverting':
+        out.push({ kind: 'sfx', sfx: 'match' });
+        break;
+      case 'garbageConverted':
+        for (const b of e.blocks) {
+          out.push({ kind: 'garbageBurst', row: b.row, col: b.col, color: b.color });
+        }
         break;
       case 'gameOver':
         out.push(

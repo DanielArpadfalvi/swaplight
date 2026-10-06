@@ -436,6 +436,8 @@ const CURSE_ART: Record<string, Glyph> = {
   judge: 'gavel',
   stagger: 'zigzag',
   shiver: 'snow',
+  // Daily Challenge twist (not a boss curse).
+  rush: 'arrow',
 };
 
 export const DECK_ART: Record<string, [Glyph, string]> = {

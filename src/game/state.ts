@@ -1,11 +1,14 @@
 /** UI-facing game state (published by the controller, rendered by the Preact overlay). */
 
+import type { CpuLevel } from '../core/ai';
 import type { RunState, StageGoal } from '../core/run';
+import type { DailyChallenge } from './daily';
 import type { Language } from '../i18n';
 import type { ModeId } from './modes';
 import type { CharmTargetKind, FinishedStage, RunResumePoint } from './runController';
 import type { Overlay, Screen } from './nav';
-import type { ModeStats } from './save';
+import type { DailyResult, DailyStreak, ModeStats, VersusRecord } from './save';
+import type { GarbageIcon, VersusFormat } from './versus';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 
 export type { Overlay, Screen } from './nav';
@@ -90,10 +93,109 @@ export interface SavedRunInfo {
   at: RunResumePoint;
 }
 
+/** Mode that owns the playing / paused screens. */
+export type PlayMode = 'endless' | 'run' | 'versus' | 'daily';
+
+/** A screen-space rectangle in CSS px. */
+export interface UiRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Versus match in progress (setup choices + score line). */
+export interface VersusUiState {
+  level: CpuLevel;
+  format: VersusFormat;
+  round: number;
+  /** Round wins of [player, CPU]. */
+  wins: [number, number];
+}
+
+/** In-match Versus HUD numbers (published when they change). */
+export interface VersusHudState {
+  /** Garbage cells sent by the player / the CPU this round. */
+  sent: number;
+  oppSent: number;
+  /** Incoming garbage (front first) of the player / the CPU. */
+  queue: GarbageIcon[];
+  oppQueue: GarbageIcon[];
+  /** Total incoming cells of the player. */
+  queueCells: number;
+  oppDanger: boolean;
+  /** Arming time of fresh incoming garbage (ms; queue icon animation). */
+  armMs: number;
+  /** Increments on every big incoming warning (restarts the banner). */
+  warnKey: number;
+}
+
+/** Placement of the Versus overlays (from the versus layout). */
+export interface VersusLayoutUi {
+  queue: UiRect;
+  miniQueue: UiRect;
+  card: UiRect;
+  mini: UiRect;
+}
+
+export interface VersusResultUi {
+  level: CpuLevel;
+  /** Winner of the round just played: 0 player, 1 CPU, null draw. */
+  winner: 0 | 1 | null;
+  matchOver: boolean;
+  matchWinner: 0 | 1 | null;
+  round: number;
+  wins: [number, number];
+  format: VersusFormat;
+  sent: number;
+  received: number;
+  seconds: number;
+  maxChain: number;
+  record: VersusRecord;
+}
+
+/** Daily attempt being set up / played. */
+export interface DailyUiState {
+  challenge: DailyChallenge;
+  official: boolean;
+  /** Seconds left on the clock. */
+  secondsLeft: number;
+}
+
+export interface DailyResultUi {
+  date: string;
+  score: number;
+  official: boolean;
+  reason: 'time' | 'topOut';
+  newBest: boolean;
+  streak: number;
+  bestStreak: number;
+  /** Official score of the day (null = not played officially). */
+  todayScore: number | null;
+  practiceBest: number;
+  history: { date: string; score: number | null }[];
+  shareText: string;
+}
+
 export interface GameUiState {
   screen: Screen;
   /** Which mode owns the playing / paused screens. */
-  mode: 'endless' | 'run';
+  mode: PlayMode;
+  versusSetup: { level: CpuLevel; format: VersusFormat };
+  versus: VersusUiState | null;
+  versusHud: VersusHudState | null;
+  versusLayout: VersusLayoutUi | null;
+  versusResult: VersusResultUi | null;
+  /** Versus records per level (from the save). */
+  versusRecords: Record<string, VersusRecord>;
+  daily: DailyUiState | null;
+  dailyResult: DailyResultUi | null;
+  /** Daily history + streak (from the save). */
+  dailySave: { records: Record<string, DailyResult>; streak: DailyStreak };
+  /** Today's date key (local; overridable by the test hooks). */
+  dailyToday: string;
+  /** Clipboard available (share buttons). */
+  canShare: boolean;
   /** Current run (plain data, replaced on every change). */
   run: RunState | null;
   runHud: RunHudState | null;
@@ -167,6 +269,31 @@ export interface GameActions {
   back(): void;
   exitApp(): void;
   run: RunActions;
+  versus: VersusActions;
+  daily: DailyActions;
+}
+
+/** Versus-mode UI actions (see `versusMode.ts`). */
+export interface VersusActions {
+  selectLevel(level: number): void;
+  selectFormat(format: VersusFormat): void;
+  /** Setup → match. */
+  start(): void;
+  /** Result → next round of an undecided match. */
+  nextRound(): void;
+  rematch(): void;
+  /** Result → difficulty select. */
+  changeOpponent(): void;
+}
+
+/** Daily-mode UI actions (see `dailyMode.ts`). */
+export interface DailyActions {
+  /** Intro → playing. */
+  begin(): void;
+  /** Result → a practice attempt of the same challenge. */
+  practiceAgain(): void;
+  /** Copy the share text. */
+  share(): void;
 }
 
 /** Run-mode UI actions (see `runMode.ts`). */
@@ -205,6 +332,17 @@ export interface RunActions {
 export const INITIAL_UI_STATE: GameUiState = {
   screen: 'menu',
   mode: 'endless',
+  versusSetup: { level: 1, format: 'single' },
+  versus: null,
+  versusHud: null,
+  versusLayout: null,
+  versusResult: null,
+  versusRecords: {},
+  daily: null,
+  dailyResult: null,
+  dailySave: { records: {}, streak: { current: 0, best: 0, last: '' } },
+  dailyToday: '1970-01-01',
+  canShare: false,
   run: null,
   runHud: null,
   runRerollCost: 0,

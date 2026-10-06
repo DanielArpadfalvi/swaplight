@@ -141,7 +141,9 @@ describe('sanitizeSave / parseSave', () => {
     expect(data.collectionSeen).toEqual([]);
     expect(data.fullVersion).toBe(false);
     expect(data.tutorialDone).toBe(true);
-    expect(data.daily).toEqual({ '2026-10-06': { score: 500, attempts: 2 } });
+    expect(data.daily).toEqual({
+      '2026-10-06': { score: 500, attempts: 2, official: true, practiceBest: 0 },
+    });
     expect(data.runInProgress).toEqual({ stage: 2, relics: ['a'] });
   });
 

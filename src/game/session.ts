@@ -84,6 +84,19 @@ export class EndlessSession {
 
   /** Advance one fixed tick; returns this tick's events (valid until the next call). */
   tick(now: number): SimEvent[] {
+    const inputs = this.collectInputs(now);
+    this.events.length = 0;
+    step(this.sim, inputs, this.hooks, this.events);
+    for (const e of this.events) this.eventCounts[e.type] = (this.eventCounts[e.type] ?? 0) + 1;
+    return this.events;
+  }
+
+  /**
+   * This tick's player inputs (gesture, keyboard, queued commands, merged raise) without stepping
+   * the sim — for modes that step it themselves (Versus steps both boards in lockstep). Follow
+   * with `acceptEvents` for the step's events.
+   */
+  collectInputs(now: number): SimInput[] {
     const geo = this.getGeometry();
     this.gesture.update(now, geo ?? undefined);
     this.keyboard.update();
@@ -99,9 +112,16 @@ export class EndlessSession {
       inputs.push({ type: 'raise', active: raise });
       this.raiseSent = raise;
     }
+    return inputs;
+  }
+
+  /** Adopt the events of a step made elsewhere (see `collectInputs`). */
+  acceptEvents(events: readonly SimEvent[]): SimEvent[] {
     this.events.length = 0;
-    step(this.sim, inputs, this.hooks, this.events);
-    for (const e of this.events) this.eventCounts[e.type] = (this.eventCounts[e.type] ?? 0) + 1;
+    for (const e of events) {
+      this.events.push(e);
+      this.eventCounts[e.type] = (this.eventCounts[e.type] ?? 0) + 1;
+    }
     return this.events;
   }
 }

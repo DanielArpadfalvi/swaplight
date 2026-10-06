@@ -34,9 +34,34 @@ export interface ModeStats {
 }
 
 export interface DailyResult {
+  /** Score of the official attempt (0 until it is finished). */
   score: number;
-  /** Attempts on that day. */
+  /** Attempts on that day (official + practice). */
   attempts: number;
+  /** The official attempt has been used (it is spent as soon as it starts). */
+  official: boolean;
+  /** Best unofficial (practice) score of that day. */
+  practiceBest: number;
+}
+
+/** Daily Challenge streak: consecutive days with an official attempt. */
+export interface DailyStreak {
+  current: number;
+  best: number;
+  /** `YYYY-MM-DD` of the last official attempt ('' = never). */
+  last: string;
+}
+
+/** Versus record against one CPU difficulty. */
+export interface VersusRecord {
+  /** Matches finished (won + lost + drawn). */
+  played: number;
+  won: number;
+  lost: number;
+  /** Fastest won match, whole seconds (0 = none). */
+  fastestWin: number;
+  /** Garbage cells sent in total. */
+  garbageSent: number;
 }
 
 export interface SaveData {
@@ -53,8 +78,11 @@ export interface SaveData {
   tutorialDone: boolean;
   /** One-time hints already shown (e.g. `endless.controls`). */
   hintsSeen: string[];
-  /** Best daily-challenge results, keyed by `YYYY-MM-DD`. */
+  /** Daily-challenge results of the last days (history), keyed by `YYYY-MM-DD`. */
   daily: Record<string, DailyResult>;
+  dailyStreak: DailyStreak;
+  /** Versus CPU records, keyed by difficulty level (`'1'`…`'5'`). */
+  versus: Record<string, VersusRecord>;
   /** Serialized in-progress Run (owned by the Run mode; opaque here). */
   runInProgress: JsonValue;
 }
@@ -79,6 +107,8 @@ export function createDefaultSave(): SaveData {
     tutorialDone: false,
     hintsSeen: [],
     daily: {},
+    dailyStreak: { current: 0, best: 0, last: '' },
+    versus: {},
     runInProgress: null,
   };
 }
@@ -175,7 +205,32 @@ export function sanitizeSave(raw: RawSave): SaveData {
   if (isRecord(raw.daily)) {
     for (const [date, r] of Object.entries(raw.daily)) {
       if (!DATE_KEY.test(date) || !isRecord(r)) continue;
-      daily[date] = { score: count(r.score), attempts: count(r.attempts) };
+      daily[date] = {
+        score: count(r.score),
+        attempts: count(r.attempts),
+        // Pre-T5.2 entries only existed for played (official) days.
+        official: r.official === undefined ? count(r.attempts) > 0 : r.official === true,
+        practiceBest: count(r.practiceBest),
+      };
+    }
+  }
+  const streakRaw = isRecord(raw.dailyStreak) ? raw.dailyStreak : {};
+  const dailyStreak: DailyStreak = {
+    current: count(streakRaw.current),
+    best: Math.max(count(streakRaw.best), count(streakRaw.current)),
+    last: typeof streakRaw.last === 'string' && DATE_KEY.test(streakRaw.last) ? streakRaw.last : '',
+  };
+  const versus: Record<string, VersusRecord> = {};
+  if (isRecord(raw.versus)) {
+    for (const [level, r] of Object.entries(raw.versus)) {
+      if (!/^[1-5]$/.test(level) || !isRecord(r)) continue;
+      versus[level] = {
+        played: count(r.played),
+        won: count(r.won),
+        lost: count(r.lost),
+        fastestWin: count(r.fastestWin),
+        garbageSent: count(r.garbageSent),
+      };
     }
   }
   return {
@@ -188,6 +243,8 @@ export function sanitizeSave(raw: RawSave): SaveData {
     tutorialDone: raw.tutorialDone === true,
     hintsSeen: stringList(raw.hintsSeen),
     daily,
+    dailyStreak,
+    versus,
     runInProgress: isJson(raw.runInProgress) ? raw.runInProgress : base.runInProgress,
   };
 }

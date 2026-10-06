@@ -23,6 +23,10 @@ export interface ModeHost {
   startEndless(): void;
   /** Open the Run mode (continue the saved run, or pick a deck for a new one). */
   startRun(): void;
+  /** Open the Versus CPU difficulty select. */
+  startVersus?(): void;
+  /** Open today's Daily Challenge. */
+  startDaily?(): void;
 }
 
 export interface ModeDef {
@@ -62,7 +66,9 @@ export const MODES: readonly ModeDef[] = [
     descKey: 'modes.versus',
     icon: 'versus',
     accent: 'orange',
+    // Easy and Normal are free; Hard and above are gated inside the mode.
     access: 'free',
+    start: (host) => host.startVersus?.(),
   },
   {
     id: 'daily',
@@ -71,6 +77,7 @@ export const MODES: readonly ModeDef[] = [
     icon: 'daily',
     accent: 'gold',
     access: 'full',
+    start: (host) => host.startDaily?.(),
   },
   {
     id: 'puzzles',

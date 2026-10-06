@@ -1,6 +1,9 @@
 import type { SimState } from '../core/types';
 import type { Overlay, Screen } from './nav';
+import type { DailyTestApi } from './dailyMode';
 import type { RunTestApi } from './runMode';
+import type { PlayMode } from './state';
+import type { VersusTestApi } from './versusMode';
 import type { SaveData } from './save';
 
 /** Test / debug hooks, exposed as `window.__swaplight` in dev builds or with `?test`. */
@@ -38,11 +41,17 @@ export interface SwaplightTestApi {
   renderFrames(n: number, dtMs?: number): void;
   /** Run-mode hooks (start a run with a seed / deck, force-win stages, shop, charms…). */
   run?: RunTestApi;
+  /** Versus CPU hooks (start with a seed / level, scripted garbage, force win / lose…). */
+  versus?: VersusTestApi;
+  /** Daily Challenge hooks (fix the date, start, finish…). */
+  daily?: DailyTestApi;
+  /** Grant / revoke the Full Version entitlement (mock store). */
+  setFullVersion?(on: boolean): void;
 }
 
 export interface SwaplightStateSummary {
   screen: Screen;
-  mode: 'endless' | 'run';
+  mode: PlayMode;
   overlays: Overlay[];
   /** The on-screen RAISE button is held. */
   raiseButton: boolean;

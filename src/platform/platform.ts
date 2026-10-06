@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { createWebClipboard, type Clipboard } from './clipboard';
 import { createHaptics, createNativeHapticsDriver, createWebHapticsDriver } from './haptics';
 import { createNativeLifecycle, createWebLifecycle } from './lifecycle';
 import { MockPurchases, type Purchases } from './purchases';
@@ -14,6 +15,7 @@ export interface Platform {
   readonly lifecycle: Lifecycle;
   readonly systemUi: SystemUI;
   readonly purchases: Purchases;
+  readonly clipboard: Clipboard;
 }
 
 export interface CreatePlatformOptions {
@@ -35,6 +37,7 @@ export function createPlatform(options: CreatePlatformOptions = {}): Platform {
   const systemUi = o.systemUi ?? (native ? createNativeSystemUI() : createWebSystemUI());
   // M8 replaces the native branch with the RevenueCat implementation.
   const purchases = o.purchases ?? new MockPurchases(storage);
+  const clipboard = o.clipboard ?? createWebClipboard();
 
-  return { native, storage, haptics, lifecycle, systemUi, purchases };
+  return { native, storage, haptics, lifecycle, systemUi, purchases, clipboard };
 }
