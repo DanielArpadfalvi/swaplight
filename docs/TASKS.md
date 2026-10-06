@@ -29,8 +29,8 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 - [x] T4.5 Run UI: stage intro, shop, relic bar, run summary
 
 ## M5 – More modes
-- [ ] T5.1 Garbage blocks + Versus CPU (AI, 5 difficulties)
-- [ ] T5.2 Daily challenge (date seed + modifier)
+- [x] T5.1 Garbage blocks + Versus CPU (AI, 5 difficulties)
+- [x] T5.2 Daily challenge (date seed + modifier)
 - [x] T5.3 Puzzle mode + solver/validator + 4 packs × 30
 - [x] T5.4 Interactive tutorial
 
