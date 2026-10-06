@@ -26,7 +26,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 - [x] T4.2 Relic system (effect hooks) + first 40 relics
 - [x] T4.3 Charms (15) + shop (buy/sell/reroll)
 - [x] T4.4 Bosses (8 curses) + decks (6) + Brightness levels 1–8
-- [ ] T4.5 Run UI: stage intro, shop, relic bar, run summary
+- [x] T4.5 Run UI: stage intro, shop, relic bar, run summary
 
 ## M5 – More modes
 - [ ] T5.1 Garbage blocks + Versus CPU (AI, 5 difficulties)

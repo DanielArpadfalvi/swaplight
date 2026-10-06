@@ -1,4 +1,4 @@
-import { createSim, step } from '../core/sim';
+import { createSim, step, type SimHooks } from '../core/sim';
 import type { SimEvent, SimInput, SimState } from '../core/types';
 import type { BoardGeometry } from '../input/geometry';
 import { GestureController } from '../input/gesture';
@@ -41,8 +41,17 @@ export class EndlessSession {
     return String(this.sim.seed);
   }
 
+  /** Sim hooks passed to every step (Run stages: relics, curses…); none for Endless. */
+  hooks: SimHooks | undefined = undefined;
+
   restart(seed: string): void {
-    this.sim = createSim(seed, {}, 'endless');
+    this.load(createSim(seed, {}, 'endless'));
+  }
+
+  /** Play an existing sim (a Run stage, or a resumed one) with optional hooks. */
+  load(sim: SimState, hooks?: SimHooks): void {
+    this.sim = sim;
+    this.hooks = hooks;
     this.gesture.reset();
     this.gesture.takeCommands();
     this.gesture.takeUiEvents();
@@ -91,7 +100,7 @@ export class EndlessSession {
       this.raiseSent = raise;
     }
     this.events.length = 0;
-    step(this.sim, inputs, undefined, this.events);
+    step(this.sim, inputs, this.hooks, this.events);
     for (const e of this.events) this.eventCounts[e.type] = (this.eventCounts[e.type] ?? 0) + 1;
     return this.events;
   }

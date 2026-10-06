@@ -47,13 +47,14 @@ test('menu → settings persist across reload → endless → pause → quit to 
     await expect(page.getByTestId(`mode-${id}`)).toBeVisible();
   }
   await expect(page.getByTestId('mode-endless')).toHaveClass(/mode-playable/);
-  await expect(page.getByTestId('mode-run')).toHaveClass(/mode-soon/);
+  await expect(page.getByTestId('mode-run')).toHaveClass(/mode-playable/);
+  await expect(page.getByTestId('mode-tutorial')).toHaveClass(/mode-soon/);
   await expect(page.getByTestId('mode-daily').getByTestId('lock-badge')).toBeVisible();
   expect((await page.evaluate(() => window.__swaplight!.getRenderInfo())).boardVisible).toBe(false);
   await shot(page, 'menu');
 
   // A coming-soon mode explains itself instead of starting.
-  await page.getByTestId('mode-run').click();
+  await page.getByTestId('mode-tutorial').click();
   await expect(page.getByTestId('toast')).toBeVisible();
   expect((await state(page)).screen).toBe('menu');
 

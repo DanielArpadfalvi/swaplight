@@ -4,15 +4,39 @@
  * the stack: `backAction` decides what it does, the controller performs it.
  */
 
-export type Screen = 'menu' | 'playing' | 'paused' | 'gameOver';
+export type Screen =
+  | 'menu'
+  | 'playing'
+  | 'paused'
+  | 'gameOver'
+  // Run mode flow (in-stage play reuses 'playing' / 'paused').
+  | 'runSetup'
+  | 'runMap'
+  | 'stageIntro'
+  | 'stageResult'
+  | 'shop'
+  | 'runEnd';
 
-export type Overlay = 'settings' | 'stats' | 'collection' | 'credits' | 'privacy' | 'exitConfirm';
+export type Overlay =
+  'settings' | 'stats' | 'collection' | 'credits' | 'privacy' | 'exitConfirm' | 'abandonConfirm';
+
+/** Screens that show the board canvas (the others show only the backdrop). */
+export function showsBoard(screen: Screen): boolean {
+  return (
+    screen === 'playing' ||
+    screen === 'paused' ||
+    screen === 'gameOver' ||
+    screen === 'stageIntro' ||
+    screen === 'stageResult'
+  );
+}
 
 export type BackAction =
   | { type: 'closeOverlay' }
   | { type: 'pause' }
   | { type: 'resume' }
   | { type: 'toMenu' }
+  | { type: 'toRunMap' }
   | { type: 'confirmExit' }
   | { type: 'none' };
 
@@ -24,7 +48,15 @@ export function backAction(screen: Screen, overlays: readonly Overlay[]): BackAc
     case 'paused':
       return { type: 'resume' };
     case 'gameOver':
+    case 'runSetup':
+    case 'runMap':
+    case 'shop':
+    case 'runEnd':
       return { type: 'toMenu' };
+    case 'stageIntro':
+      return { type: 'toRunMap' };
+    case 'stageResult':
+      return { type: 'none' };
     case 'menu':
       return { type: 'confirmExit' };
   }

@@ -21,6 +21,8 @@ export type ModeAccent = 'cyan' | 'pink' | 'violet' | 'gold' | 'green' | 'orange
 export interface ModeHost {
   /** Start (or restart) a classic Endless game. */
   startEndless(): void;
+  /** Open the Run mode (continue the saved run, or pick a deck for a new one). */
+  startRun(): void;
 }
 
 export interface ModeDef {
@@ -41,7 +43,9 @@ export const MODES: readonly ModeDef[] = [
     descKey: 'modes.run',
     icon: 'run',
     accent: 'pink',
+    // Free with the Neon deck; other decks and Brightness > 1 are gated inside the mode.
     access: 'free',
+    start: (host) => host.startRun(),
   },
   {
     id: 'endless',

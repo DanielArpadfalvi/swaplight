@@ -13,8 +13,9 @@ import { mountUi } from '../ui/mount';
 import { feedbackForEvents, musicIntensity, type Feedback } from './feedback';
 import { GameLoop } from './loop';
 import { startMode, type ModeHost } from './modes';
-import { backAction, popOverlay, pushOverlay, type Overlay } from './nav';
+import { backAction, popOverlay, pushOverlay, showsBoard, type Overlay } from './nav';
 import { recordGame } from './progress';
+import { createRunMode } from './runMode';
 import { SaveManager } from './save';
 import { EndlessSession } from './session';
 import { applySettings, sanitizeSettings, type Settings, type SettingsTargets } from './settings';
@@ -67,9 +68,15 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     fullVersion: save.data.fullVersion,
     best: save.data.modes.endless?.best ?? 0,
     language: getLanguage(),
+    unlocks: [...save.data.unlocks],
   });
   save.subscribe((data) =>
-    store.set({ settings: data.settings, modeStats: data.modes, fullVersion: data.fullVersion }),
+    store.set({
+      settings: data.settings,
+      modeStats: data.modes,
+      fullVersion: data.fullVersion,
+      unlocks: data.unlocks,
+    }),
   );
 
   function setFullVersion(value: boolean): void {
@@ -105,7 +112,10 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   };
 
   const flushSave = (): Promise<void> => save.flush();
-  window.addEventListener('pagehide', () => void flushSave());
+  window.addEventListener('pagehide', () => {
+    if (store.get().mode === 'run') runMode.persist();
+    void flushSave();
+  });
 
   let layout: GameLayout | null = null;
   const geometry = (): BoardGeometry | null =>
@@ -114,6 +124,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
 
   let frozen = false;
   let gameOverTimer: number | undefined;
+  let layoutMode: 'endless' | 'run' = 'endless';
 
   const relayout = (): void => {
     const { width, height } = scene.app.screen;
@@ -122,6 +133,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       rows,
       cols,
       bottomMargin: CONTROLS_HEIGHT,
+      // The Run HUD adds the goal bar and the relic row.
+      ...(layoutMode === 'run' ? { hudFraction: 0.235, minHud: 176, maxHud: 214 } : {}),
     });
     scene.setLayout(layout, cols);
     store.set({
@@ -135,6 +148,10 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   };
   relayout();
   scene.app.renderer.on('resize', relayout);
+  const setLayoutMode = (mode: 'endless' | 'run'): void => {
+    layoutMode = mode;
+    relayout();
+  };
 
   let flashKey = 0;
   const applyFeedback = (list: readonly Feedback[], sim: SimState): void => {
@@ -162,7 +179,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
           scene.excite(f.amount);
           break;
         case 'scored':
-          if (store.get().settings.showBreakdown) {
+          if (store.get().settings.showBreakdown || store.get().mode === 'run') {
             store.set({ scoreFlash: { ...f, key: ++flashKey } });
           }
           break;
@@ -235,7 +252,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       audio.setIntensity(intensity);
     }
     publish(sim);
-    if (sim.gameOver) enterGameOver();
+    if (store.get().mode === 'run') runMode.afterTick(events);
+    else if (sim.gameOver) enterGameOver();
   };
 
   const loop = new GameLoop({
@@ -261,7 +279,10 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
 
   const startGame = (): void => {
     window.clearTimeout(gameOverTimer);
+    if (store.get().mode === 'run') runMode.suspend();
+    store.set({ mode: 'endless' });
     session.restart(nextSeed());
+    setLayoutMode('endless');
     scene.board.resetTracking();
     scene.board.captureTick(session.sim);
     scene.clearEffects();
@@ -298,7 +319,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     session.gesture.reset();
     session.keyboard.releaseAll();
     setRaise(false);
-    store.set({ screen: 'paused' });
+    store.set({ screen: 'paused', charmMenu: null, targeting: null });
+    if (store.get().mode === 'run') runMode.persist();
   };
 
   const resumeGame = (): void => {
@@ -312,18 +334,24 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     loop.pause();
     const sim = session.sim;
     const screen = store.get().screen;
-    if ((screen === 'playing' || screen === 'paused') && !sim.gameOver) {
+    if (store.get().mode === 'run') {
+      runMode.suspend();
+    } else if ((screen === 'playing' || screen === 'paused') && !sim.gameOver) {
       if (sim.tick >= MIN_RECORDED_TICKS) recordCurrentGame();
     }
     session.restart(nextSeed());
+    setLayoutMode('endless');
     scene.board.resetTracking();
     scene.board.captureTick(session.sim);
     scene.clearEffects();
     publish(session.sim);
     store.set({
       screen: 'menu',
+      mode: 'endless',
       overlays: [],
       scoreFlash: null,
+      charmMenu: null,
+      targeting: null,
       danger: false,
       raiseHeld: false,
     });
@@ -341,8 +369,34 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     applySettings(next, settingsTargets, prev);
   };
 
+  const runMode = createRunMode({
+    store,
+    save,
+    audio,
+    haptics: platform.haptics,
+    scene,
+    session,
+    loop,
+    isFrozen: () => frozen,
+    showToast: (text) => showToast(text),
+    setLayoutMode,
+    geometry,
+    resetBoard() {
+      scene.board.resetTracking();
+      scene.board.captureTick(session.sim);
+      scene.clearEffects();
+      loop.reset();
+      lastIntensity = -1;
+      publish(session.sim);
+      store.set({ scoreFlash: null, raiseHeld: false });
+    },
+    randomSeed: nextSeed,
+    toMenu: () => toMenu(),
+  });
+
   const modeHost: ModeHost = {
     startEndless: () => startGame(),
+    startRun: () => runMode.open(),
   };
 
   const handleBack = (): void => {
@@ -361,6 +415,9 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         break;
       case 'toMenu':
         actions.menu();
+        break;
+      case 'toRunMap':
+        runMode.backToMap();
         break;
       case 'confirmExit':
         audio.uiTap();
@@ -442,6 +499,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       setOverlays(popOverlay(store.get().overlays, 'exitConfirm'));
       platform.lifecycle.exitApp();
     },
+    run: runMode.actions,
   };
 
   bindPointerInput(scene.canvas, session.gesture, () => {
@@ -464,7 +522,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   // Menus show only the backdrop; the board appears with the game.
   let boardShown: boolean | null = null;
   const syncBoard = (state: GameUiState): void => {
-    const show = state.screen !== 'menu';
+    const show = showsBoard(state.screen);
     if (show === boardShown) return;
     boardShown = show;
     scene.setBoardVisible(show);
@@ -498,6 +556,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         const sim = session.sim;
         return {
           screen: store.get().screen,
+          mode: store.get().mode,
           overlays: [...store.get().overlays],
           raiseButton: session.raiseButtonHeld,
           seed: session.seed,
@@ -537,6 +596,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         return cellCenter(layout, row, col, geo.riseOffsetPx / layout.cellSize);
       },
     };
+    api.run = runMode.testApi;
     window.__swaplight = api;
   }
 }

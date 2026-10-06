@@ -331,6 +331,11 @@ export class FloatingTextPool extends Container {
     this.place(p);
   }
 
+  /** Hide every active popup (new game / stage). */
+  clear(): void {
+    for (const p of this.items) p.root.visible = false;
+  }
+
   update(dt: number): void {
     for (const p of this.items) {
       if (!p.root.visible) continue;

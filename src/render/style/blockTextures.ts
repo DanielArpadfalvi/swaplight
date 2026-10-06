@@ -5,8 +5,11 @@ import { desaturate, mixColor, scaleColor } from './colorMath';
 import { NEON_PALETTE } from './palette';
 import type { BlockSymbol, Palette } from './palette';
 
-/** What sits in a cell. `color` blocks need a `color` index into `Palette.blocks`. */
-export type BlockKind = 'color' | 'garbage' | 'wild' | 'bomb';
+/**
+ * What sits in a cell. `color` blocks need a `color` index into `Palette.blocks`. `mystery` is a
+ * color block whose color is hidden (The Veil boss curse): a neutral tile with a "?".
+ */
+export type BlockKind = 'color' | 'garbage' | 'wild' | 'bomb' | 'mystery';
 
 /**
  * Visual state of a tile:
@@ -215,6 +218,11 @@ export class BlockTextureFactory {
         light = WHITE;
         dark = 0x2a1f4a;
         break;
+      case 'mystery':
+        base = 0x8c86b4;
+        light = 0xe2ddff;
+        dark = 0x17132c;
+        break;
     }
     const tile: TileColors = {
       rim: base,
@@ -225,7 +233,7 @@ export class BlockTextureFactory {
       symbolGlow: mixColor(base, WHITE, 0.35),
       symbolGlowAlpha: 0.7,
       glow: base,
-      glowAlpha: kind === 'garbage' ? 0.28 : 0.62,
+      glowAlpha: kind === 'garbage' ? 0.28 : kind === 'mystery' ? 0.32 : 0.62,
     };
     if (state === 'dimmed') {
       const dim = (c: number): number => dimmedColor(c);
@@ -468,7 +476,7 @@ function rgba(color: number, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-type GlyphKind = BlockSymbol | 'wild' | 'bomb' | 'garbage';
+type GlyphKind = BlockSymbol | 'wild' | 'bomb' | 'garbage' | 'mystery';
 
 /**
  * Append the path of a block symbol centered at (cx, cy) with nominal radius r. The caller fills
@@ -533,6 +541,28 @@ export function drawSymbol(g: Graphics, kind: GlyphKind, cx: number, cy: number,
     case 'garbage':
       g.roundRect(cx - r * 0.7, cy - r * 0.7, r * 1.4, r * 1.4, r * 0.3);
       break;
+    case 'mystery': {
+      // A bold "?": a ring segment (hook), a short stem and a dot.
+      const hy = cy - r * 0.38;
+      const R = r * 0.62;
+      const w = r * 0.36;
+      const a0 = (155 * Math.PI) / 180;
+      const a1 = (445 * Math.PI) / 180;
+      const steps = 18;
+      const pts: number[] = [];
+      for (let i = 0; i <= steps; i++) {
+        const a = a0 + ((a1 - a0) * i) / steps;
+        pts.push(cx + Math.cos(a) * (R + w / 2), hy + Math.sin(a) * (R + w / 2));
+      }
+      for (let i = steps; i >= 0; i--) {
+        const a = a0 + ((a1 - a0) * i) / steps;
+        pts.push(cx + Math.cos(a) * (R - w / 2), hy + Math.sin(a) * (R - w / 2));
+      }
+      g.poly(pts);
+      g.roundRect(cx - w / 2, hy + R - w * 0.6, w, r * 0.62, w * 0.3);
+      g.circle(cx, cy + r * 0.95, w * 0.62);
+      break;
+    }
   }
 }
 

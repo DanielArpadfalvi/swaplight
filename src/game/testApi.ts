@@ -1,5 +1,6 @@
 import type { SimState } from '../core/types';
 import type { Overlay, Screen } from './nav';
+import type { RunTestApi } from './runMode';
 import type { SaveData } from './save';
 
 /** Test / debug hooks, exposed as `window.__swaplight` in dev builds or with `?test`. */
@@ -35,10 +36,13 @@ export interface SwaplightTestApi {
   startRendering(): void;
   /** Draw `n` frames advancing effects by `dtMs` each (sim only steps if not frozen). */
   renderFrames(n: number, dtMs?: number): void;
+  /** Run-mode hooks (start a run with a seed / deck, force-win stages, shop, charms…). */
+  run?: RunTestApi;
 }
 
 export interface SwaplightStateSummary {
   screen: Screen;
+  mode: 'endless' | 'run';
   overlays: Overlay[];
   /** The on-screen RAISE button is held. */
   raiseButton: boolean;

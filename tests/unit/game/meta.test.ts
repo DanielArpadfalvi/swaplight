@@ -106,9 +106,9 @@ describe('mode registry', () => {
     }
   });
 
-  it('Endless is playable; unimplemented modes are "soon"', () => {
+  it('Endless and Run are playable for free; unimplemented modes are "soon"', () => {
     expect(modeStatus(getMode('endless')!, false)).toBe('playable');
-    expect(modeStatus(getMode('run')!, false)).toBe('soon');
+    expect(modeStatus(getMode('run')!, false)).toBe('playable');
     expect(modeStatus(getMode('daily')!, true)).toBe('soon');
   });
 
@@ -116,7 +116,7 @@ describe('mode registry', () => {
     const daily: ModeDef = { ...getMode('daily')!, start: vi.fn() };
     expect(modeStatus(daily, false)).toBe('locked');
     expect(modeStatus(daily, true)).toBe('playable');
-    const host = { startEndless: vi.fn() };
+    const host = { startEndless: vi.fn(), startRun: vi.fn() };
     expect(startMode('daily', host, false, [daily])).toBe('locked');
     expect(daily.start).not.toHaveBeenCalled();
     expect(startMode('daily', host, true, [daily])).toBe('playable');
@@ -124,9 +124,11 @@ describe('mode registry', () => {
   });
 
   it('startMode runs the start function of playable modes only', () => {
-    const host = { startEndless: vi.fn() };
-    expect(startMode('run', host, true)).toBe('soon');
+    const host = { startEndless: vi.fn(), startRun: vi.fn() };
+    expect(startMode('daily', host, true)).toBe('soon');
     expect(host.startEndless).not.toHaveBeenCalled();
+    expect(startMode('run', host, false)).toBe('playable');
+    expect(host.startRun).toHaveBeenCalledTimes(1);
     expect(startMode('endless', host, false)).toBe('playable');
     expect(host.startEndless).toHaveBeenCalledTimes(1);
   });

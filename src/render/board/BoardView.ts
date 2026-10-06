@@ -1,6 +1,7 @@
 import { Container, FillGradient, Graphics, Sprite, Texture } from 'pixi.js';
 import type { Renderer } from 'pixi.js';
-import { riseFraction } from '../../core/sim';
+import { MOD_HIDDEN_COLOR } from '../../core/run/keys';
+import { MOD_LOCKED_COLUMNS, MOD_SWAP_LOCK_UNTIL, riseFraction } from '../../core/sim';
 import type { BlockKind as CoreBlockKind, CellRef, SimState } from '../../core/types';
 import { blockRenderPos, dangerColumns } from '../../core/view';
 import {
@@ -67,6 +68,8 @@ export class BoardView extends Container {
   private readonly frame = new Graphics();
   private readonly frameHot = new Graphics();
   private readonly cursorGfx = new Graphics();
+  /** Run curses: frozen columns / swap lock overlay. */
+  private readonly lockGfx = new Graphics();
   private fadeGradient: FillGradient | null = null;
   private frameGradient: FillGradient | null = null;
 
@@ -90,6 +93,7 @@ export class BoardView extends Container {
       this.content,
       this.mask_,
       this.previewFade,
+      this.lockGfx,
       this.frameHot,
       this.frame,
       this.cursorGfx,
@@ -152,6 +156,12 @@ export class BoardView extends Container {
     this.dangerLevel += ((pinned ? 1 : danger.length > 0 ? 0.45 : 0) - this.dangerLevel) * 0.12;
     const t = this.time;
     let heldPos: { x: number; y: number } | null = null;
+    // The Veil: one color is drawn as a neutral "?" tile (revealed while it flashes in a match).
+    const hidden = sim.modifiers[MOD_HIDDEN_COLOR];
+    const texKind = (kind: CoreBlockKind, color: number, revealed: boolean): TexKind =>
+      kind === 'normal' && hidden !== undefined && color === hidden && !revealed
+        ? 'mystery'
+        : TEX_KIND[kind];
 
     for (let i = 0; i < sim.cells.length; i++) {
       const b = sim.cells[i];
@@ -203,7 +213,9 @@ export class BoardView extends Container {
       const x = layout.originX + (sc + 0.5) * cell + dx;
       const y = layout.originY + (sr + 0.5) * cell + dy;
       if (b.id === hints.heldBlockId) heldPos = { x, y };
-      this.place(b.id, TEX_KIND[b.kind], b.color, state, x, y, scaleX, scaleY, alphaV, tint, frame);
+      const revealed = p.state === 'matched' || p.state === 'popped';
+      const kind = texKind(b.kind, b.color, revealed);
+      this.place(b.id, kind, b.color, state, x, y, scaleX, scaleY, alphaV, tint, frame);
     }
 
     for (let c = 0; c < sim.preview.length && c < cols; c++) {
@@ -213,7 +225,19 @@ export class BoardView extends Container {
       const sr = pos ? pos.row : rows - rise;
       const x = layout.originX + (c + 0.5) * cell;
       const y = layout.originY + (sr + 0.5) * cell;
-      this.place(b.id, TEX_KIND[b.kind], b.color, 'dimmed', x, y, 1, 1, 1, 0xffffff, frame);
+      this.place(
+        b.id,
+        texKind(b.kind, b.color, false),
+        b.color,
+        'dimmed',
+        x,
+        y,
+        1,
+        1,
+        1,
+        0xffffff,
+        frame,
+      );
     }
 
     // Release sprites of blocks that are gone.
@@ -228,6 +252,58 @@ export class BoardView extends Container {
     this.drawHeld(heldPos, cell);
     this.drawCursor(hints.cursor, rise, cell);
     this.drawDanger(danger, pinned, cell);
+    this.drawLocks(sim, cell);
+  }
+
+  /** Frozen columns (The Lock) and the swap lock (The Stagger): icy overlays with a padlock. */
+  private drawLocks(sim: SimState, cell: number): void {
+    const g = this.lockGfx;
+    g.clear();
+    const layout = this.layout;
+    if (!layout) return;
+    const mods = sim.modifiers;
+    const mask = mods[MOD_LOCKED_COLUMNS] ?? 0;
+    const until = mods[MOD_SWAP_LOCK_UNTIL];
+    const swapLocked = until !== undefined && sim.tick < until;
+    if (mask === 0 && !swapLocked) return;
+    const ice = 0x8fe3ff;
+    const { originX: x0, originY: y0, boardHeight: h } = layout;
+    const pulse = 0.5 + 0.5 * Math.sin(this.time * 3);
+    for (let c = 0; c < this.cols; c++) {
+      if (((mask >>> c) & 1) === 0) continue;
+      const x = x0 + c * cell;
+      g.rect(x + 1, y0, cell - 2, h).fill({ color: ice, alpha: 0.1 + 0.05 * pulse });
+      // Chain links down the column edges.
+      for (let y = y0 + cell * 0.25; y < y0 + h; y += cell * 0.5) {
+        g.roundRect(x + 2, y, cell * 0.08, cell * 0.28, cell * 0.04).fill({
+          color: ice,
+          alpha: 0.5,
+        });
+        g.roundRect(x + cell - 2 - cell * 0.08, y, cell * 0.08, cell * 0.28, cell * 0.04).fill({
+          color: ice,
+          alpha: 0.5,
+        });
+      }
+      this.drawPadlock(g, x + cell / 2, y0 + cell * 0.55, cell * 0.36, ice);
+    }
+    if (swapLocked) {
+      const left = (until - sim.tick) / 60;
+      const a = Math.min(1, left) * 0.18;
+      g.rect(x0, y0, layout.boardWidth, h).fill({ color: ice, alpha: a });
+      this.drawPadlock(g, x0 + layout.boardWidth / 2, y0 + h * 0.12, cell * 0.5, ice);
+    }
+  }
+
+  private drawPadlock(g: Graphics, cx: number, cy: number, s: number, color: number): void {
+    g.circle(cx, cy, s * 0.95).fill({ color: 0x0b0a1c, alpha: 0.75 });
+    g.moveTo(cx - s * 0.3, cy - s * 0.12)
+      .arc(cx, cy - s * 0.12, s * 0.3, Math.PI, 0)
+      .stroke({ width: s * 0.12, color, alpha: 0.95 });
+    g.roundRect(cx - s * 0.42, cy - s * 0.12, s * 0.84, s * 0.62, s * 0.12).fill({
+      color,
+      alpha: 0.95,
+    });
+    g.circle(cx, cy + s * 0.17, s * 0.09).fill({ color: 0x0b0a1c, alpha: 0.9 });
   }
 
   private place(

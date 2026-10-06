@@ -11,6 +11,17 @@ import { SettingsScreen } from './Settings';
 import { StatsScreen } from './Stats';
 import { useCountUp } from './useCountUp';
 import { useStore } from './useStore';
+import { CharmCard, RunControls, RunHud, TargetingLayer } from './run/RunHud';
+import {
+  AbandonDialog,
+  RunEndScreen,
+  RunMapScreen,
+  RunSetupScreen,
+  StageIntro,
+  StageResultScreen,
+} from './run/RunScreens';
+import { ShopScreen } from './run/Shop';
+import './run/run.css';
 
 interface AppProps {
   store: Store<GameUiState>;
@@ -24,30 +35,66 @@ const OVERLAYS: readonly Overlay[] = [
   'credits',
   'privacy',
   'exitConfirm',
+  'abandonConfirm',
 ];
 
 export function App({ store, actions }: AppProps) {
   const state = useStore(store);
   const rm = state.settings.reducedMotion;
   const ms = rm ? 0 : 220;
-  const inGame = state.screen !== 'menu';
+  const screen = state.screen;
+  const run = state.mode === 'run';
+  const endlessHud = !run && (screen === 'playing' || screen === 'paused' || screen === 'gameOver');
+  const runHud =
+    run &&
+    (screen === 'playing' ||
+      screen === 'paused' ||
+      screen === 'stageIntro' ||
+      screen === 'stageResult');
   const classes = [
     'ui-root',
     `screen-${state.screen}`,
+    `mode-is-${state.mode}`,
     rm ? 'reduced-motion' : '',
     state.settings.highContrast ? 'high-contrast' : '',
   ];
   return (
     <div class={classes.filter(Boolean).join(' ')} lang={state.language}>
-      <Presence when={!inGame} ms={ms}>
+      <Presence when={screen === 'menu'} ms={ms}>
         {(leaving) => <MainMenu state={state} actions={actions} leaving={leaving} />}
       </Presence>
-      {inGame && <Hud state={state} actions={actions} />}
-      {inGame && <RaiseButton state={state} actions={actions} />}
-      <Presence when={state.screen === 'paused'} ms={ms}>
-        {(leaving) => <PausePanel actions={actions} leaving={leaving} />}
+      {endlessHud && <Hud state={state} actions={actions} />}
+      {endlessHud && <RaiseButton state={state} actions={actions} />}
+      {runHud && <RunHud state={state} actions={actions} />}
+      {runHud && screen !== 'stageResult' && <RunControls state={state} actions={actions} />}
+      <Presence when={screen === 'paused'} ms={ms}>
+        {(leaving) => <PausePanel run={run} actions={actions} leaving={leaving} />}
       </Presence>
-      {state.screen === 'gameOver' && <GameOverPanel state={state} actions={actions} />}
+      {screen === 'gameOver' && <GameOverPanel state={state} actions={actions} />}
+      <Presence when={screen === 'runSetup'} ms={ms}>
+        {(leaving) => <RunSetupScreen state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      <Presence when={screen === 'runMap'} ms={ms}>
+        {(leaving) => <RunMapScreen state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      <Presence when={screen === 'stageIntro'} ms={ms}>
+        {(leaving) => <StageIntro state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      <Presence when={screen === 'stageResult'} ms={ms}>
+        {(leaving) => <StageResultScreen state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      <Presence when={screen === 'shop'} ms={ms}>
+        {(leaving) => <ShopScreen state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      <Presence when={screen === 'runEnd'} ms={ms}>
+        {(leaving) => <RunEndScreen state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      {(screen === 'playing' || screen === 'shop') && state.charmMenu !== null && (
+        <CharmCard state={state} actions={actions} />
+      )}
+      {screen === 'playing' && state.targeting && (
+        <TargetingLayer state={state} actions={actions} />
+      )}
       {OVERLAYS.map((o) => {
         const index = state.overlays.indexOf(o);
         return (
@@ -92,6 +139,8 @@ function renderOverlay(
       return <PrivacyScreen {...props} />;
     case 'exitConfirm':
       return <ExitDialog {...props} />;
+    case 'abandonConfirm':
+      return <AbandonDialog {...props} />;
   }
 }
 
@@ -199,7 +248,15 @@ function RaiseButton({ state, actions }: { state: GameUiState; actions: GameActi
   );
 }
 
-function PausePanel({ actions, leaving }: { actions: GameActions; leaving: boolean }) {
+function PausePanel({
+  run,
+  actions,
+  leaving,
+}: {
+  run: boolean;
+  actions: GameActions;
+  leaving: boolean;
+}) {
   return (
     <div
       class={`overlay overlay-dim${leaving ? ' is-leaving' : ''}`}
@@ -236,6 +293,16 @@ function PausePanel({ actions, leaving }: { actions: GameActions; leaving: boole
         >
           {t('common.quitToMenu')}
         </button>
+        {run && (
+          <button
+            type="button"
+            class="btn btn-ghost btn-quiet btn-danger"
+            data-testid="pause-abandon"
+            onClick={() => actions.run.abandon()}
+          >
+            {t('run.abandon')}
+          </button>
+        )}
       </div>
     </div>
   );

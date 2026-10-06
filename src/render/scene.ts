@@ -174,6 +174,7 @@ export class GameScene {
 
   clearEffects(): void {
     this.particles.clear();
+    this.popups.clear();
     this.excitement = 0;
   }
 }

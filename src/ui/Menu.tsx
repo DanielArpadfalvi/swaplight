@@ -1,4 +1,4 @@
-import type { ComponentChildren } from 'preact';
+import { Fragment, type ComponentChildren } from 'preact';
 import { versionLabel } from '../core/version';
 import { MODES, modeStatus, type ModeDef } from '../game/modes';
 import type { GameActions, GameUiState } from '../game/state';
@@ -24,7 +24,10 @@ export function MainMenu({ state, actions, leaving }: MenuProps) {
       </header>
       <nav class="mode-list" aria-label={t('common.play')}>
         {MODES.map((mode, i) => (
-          <ModeCard key={mode.id} mode={mode} index={i} state={state} actions={actions} />
+          <Fragment key={mode.id}>
+            <ModeCard mode={mode} index={i} state={state} actions={actions} />
+            {mode.id === 'run' && state.savedRun && <ContinueRun state={state} actions={actions} />}
+          </Fragment>
         ))}
       </nav>
       <footer class="menu-foot">
@@ -116,6 +119,47 @@ function ModeCard({
         </span>
       )}
     </button>
+  );
+}
+
+/** Saved run strip under the Run card: continue it or abandon it. */
+function ContinueRun({ state, actions }: { state: GameUiState; actions: GameActions }) {
+  const saved = state.savedRun!;
+  return (
+    <div class="run-continue accent-pink" data-testid="run-continue-strip">
+      <button
+        type="button"
+        class="run-continue-go"
+        data-testid="run-continue"
+        onClick={() => actions.run.continueRun()}
+      >
+        <IconPlay size={14} />
+        <span class="run-continue-text">
+          <span class="run-continue-title">{t('run.continueRun')}</span>
+          <span class="run-continue-where">
+            {saved.stage === 3
+              ? t('run.bossTitle', { act: saved.act })
+              : t('run.continueWhere', { act: saved.act, stage: saved.stage + 1 })}
+          </span>
+        </span>
+      </button>
+      <button
+        type="button"
+        class="run-continue-x"
+        data-testid="run-abandon-menu"
+        aria-label={t('run.abandon')}
+        onClick={() => actions.run.abandon()}
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path
+            d="M6 6l12 12M18 6 6 18"
+            stroke="currentColor"
+            stroke-width="2.4"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
+    </div>
   );
 }
 

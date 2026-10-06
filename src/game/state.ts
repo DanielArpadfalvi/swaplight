@@ -1,7 +1,9 @@
 /** UI-facing game state (published by the controller, rendered by the Preact overlay). */
 
+import type { RunState, StageGoal } from '../core/run';
 import type { Language } from '../i18n';
 import type { ModeId } from './modes';
+import type { CharmTargetKind, FinishedStage, RunResumePoint } from './runController';
 import type { Overlay, Screen } from './nav';
 import type { ModeStats } from './save';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
@@ -28,8 +30,91 @@ export interface ScoreFlash {
   key: number;
 }
 
+/** In-stage HUD numbers of a Run stage (published when they change). */
+export interface RunHudState {
+  goal: StageGoal;
+  value: number;
+  target: number;
+  /** 0..1 */
+  progress: number;
+  /** Whole seconds left on the stage clock. */
+  secondsLeft: number;
+  won: boolean;
+  act: number;
+  stage: number;
+  isBoss: boolean;
+  curses: string[];
+  /** Cryo charm active. */
+  frozen: boolean;
+  /** Overcharge charm active. */
+  overcharged: boolean;
+}
+
+/** Charm waiting for a board target (the sim is paused meanwhile). */
+export interface RunTargeting {
+  slot: number;
+  charmId: string;
+  kind: CharmTargetKind;
+  /** Board geometry in CSS px at the paused rise offset. */
+  originX: number;
+  originY: number;
+  cellSize: number;
+  rows: number;
+  cols: number;
+  riseOffsetPx: number;
+}
+
+export interface RunEndSummary {
+  won: boolean;
+  /** Where the run ended (act / stage index 0..3). */
+  act: number;
+  stage: number;
+  reason: 'goal' | 'topOut' | 'time' | 'abandon';
+  deckId: string;
+  brightness: number;
+  stagesCleared: number;
+  bestChain: number;
+  bestClear: number;
+  totalScore: number;
+  sparksEarned: number;
+  relics: string[];
+  /** Brightness levels unlocked by this run. */
+  unlockedBrightness: number[];
+}
+
+export interface SavedRunInfo {
+  act: number;
+  stage: number;
+  deckId: string;
+  brightness: number;
+  at: RunResumePoint;
+}
+
 export interface GameUiState {
   screen: Screen;
+  /** Which mode owns the playing / paused screens. */
+  mode: 'endless' | 'run';
+  /** Current run (plain data, replaced on every change). */
+  run: RunState | null;
+  runHud: RunHudState | null;
+  /** Shop helpers for the current run. */
+  runRerollCost: number;
+  runRelicSlots: number;
+  runCharmSlots: number;
+  /** Result of the stage just finished (result screen). */
+  runFinished: FinishedStage | null;
+  runEnd: RunEndSummary | null;
+  /** Relics that just fired (HUD pulse). */
+  relicPulse: { ids: string[]; key: number } | null;
+  /** Charm slot whose action card is open (in a stage the sim is paused). */
+  charmMenu: number | null;
+  targeting: RunTargeting | null;
+  /** Deck / Brightness picked on the setup screen. */
+  runSetup: { deckId: string; brightness: number };
+  /** Unlock keys from the save (Brightness levels…). */
+  unlocks: string[];
+  /** Run saved in the save file (menu "Continue"). */
+  savedRun: SavedRunInfo | null;
   score: number;
   level: number;
   /** Whole seconds played. */
@@ -81,10 +166,58 @@ export interface GameActions {
   /** Same as the hardware back button / Escape. */
   back(): void;
   exitApp(): void;
+  run: RunActions;
+}
+
+/** Run-mode UI actions (see `runMode.ts`). */
+export interface RunActions {
+  continueRun(): void;
+  /** Open the deck select for a new run. */
+  newRun(): void;
+  selectDeck(id: string): void;
+  selectBrightness(level: number): void;
+  start(): void;
+  /** Map → stage intro. */
+  playStage(): void;
+  /** Stage intro → playing. */
+  beginStage(): void;
+  /** Result screen → shop (or victory summary). */
+  continueFromResult(): void;
+  buyRelic(index: number): void;
+  buyCharm(index: number): void;
+  sellRelic(slot: number): void;
+  sellCharm(slot: number): void;
+  reroll(): void;
+  leaveShop(): void;
+  /** Open / close a charm's action card. */
+  openCharm(slot: number | null): void;
+  useCharm(slot: number): void;
+  /** Board target picked while targeting. */
+  target(row: number, col: number): void;
+  cancelCharm(): void;
+  /** Ask to abandon (confirm dialog). */
+  abandon(): void;
+  confirmAbandon(): void;
+  /** Run summary → menu. */
+  finish(): void;
 }
 
 export const INITIAL_UI_STATE: GameUiState = {
   screen: 'menu',
+  mode: 'endless',
+  run: null,
+  runHud: null,
+  runRerollCost: 0,
+  runRelicSlots: 5,
+  runCharmSlots: 2,
+  runFinished: null,
+  runEnd: null,
+  relicPulse: null,
+  charmMenu: null,
+  targeting: null,
+  runSetup: { deckId: 'neon', brightness: 1 },
+  unlocks: [],
+  savedRun: null,
   score: 0,
   level: 1,
   seconds: 0,
