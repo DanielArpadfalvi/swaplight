@@ -14,6 +14,23 @@ export default tseslint.config(
     },
   },
   {
+    // Native APIs are only reachable through the platform layer.
+    ignores: ['src/platform/**', 'capacitor.config.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@capacitor/*'],
+              message: 'Import native APIs via src/platform (createPlatform) instead.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['src/core/**/*.ts'],
     rules: {
       'no-restricted-globals': ['error', 'window', 'document'],
