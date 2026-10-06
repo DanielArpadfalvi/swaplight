@@ -29,6 +29,10 @@ export interface SimConfig {
   flashTicks: number;
   /** Gap between consecutive pops inside a match group. */
   popTicksPerBlock: number;
+  /** Garbage conversion lasts flashTicks + garbagePopTicks × (converting cells). */
+  garbagePopTicks: number;
+  /** Max conversion time in ticks (caps huge chain-converted slab clusters). */
+  garbageMaxConvertTicks: number;
 
   /** Auto-rise speed at level 1, in 1/RISE_SCALE sub-units per tick. */
   riseSpeedBase: number;
@@ -81,6 +85,8 @@ export const DEFAULT_CONFIG: Readonly<SimConfig> = Object.freeze({
 
   flashTicks: 26,
   popTicksPerBlock: 5,
+  garbagePopTicks: 3,
+  garbageMaxConvertTicks: 180,
 
   // Level 1: 16 sub-units / 0.02 per tick = 800 ticks (~13 s) per row.
   riseSpeedBase: 20,

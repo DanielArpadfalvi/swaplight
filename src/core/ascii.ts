@@ -77,6 +77,7 @@ export function loadAscii(sim: SimState, text: string): void {
   });
   if (parsed.preview) sim.preview = parsed.preview.map(make);
   sim.groups = [];
+  sim.garbage = [];
   sim.chain = 1;
   sim.stopTicks = 0;
   sim.matchScanPending = true;
@@ -100,12 +101,16 @@ export interface AsciiOptions {
   preview?: boolean;
 }
 
-/** Render the board in the same format `loadAscii` reads (block states are not encoded). */
+/**
+ * Render the board in the same format `loadAscii` reads (block states are not encoded).
+ * Garbage cells print as `#` (not readable back – use `placeGarbage`).
+ */
 export function boardToAscii(sim: SimState, options: AsciiOptions = {}): string {
   const { trim = true, preview = false } = options;
   const { rows, cols } = sim.config;
   const ch = (b: Block | null | undefined) => {
     if (!b) return '.';
+    if (b.slab !== 0) return '#';
     const letter = COLOR_CHARS[b.color] ?? '?';
     return b.chain ? letter.toLowerCase() : letter;
   };
@@ -128,7 +133,8 @@ export function boardStatesToAscii(sim: SimState): string {
     const tokens: string[] = [];
     for (let c = 0; c < cols; c++) {
       const b = sim.cells[r * cols + c];
-      tokens.push(b ? `${COLOR_CHARS[b.color] ?? '?'}${STATE_MARKS[b.state]}`.padEnd(2) : '. ');
+      const letter = b && b.slab !== 0 ? '#' : (COLOR_CHARS[b?.color ?? 0] ?? '?');
+      tokens.push(b ? `${letter}${STATE_MARKS[b.state]}`.padEnd(2) : '. ');
     }
     lines.push(tokens.join(' '));
   }

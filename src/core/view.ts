@@ -1,6 +1,7 @@
 import { columnTops } from './board';
 import { SUBUNITS_PER_CELL } from './config';
-import type { BlockKind, BlockState, SimState } from './types';
+import { findSlab } from './garbage';
+import type { BlockKind, BlockState, GarbageSlab, SimState } from './types';
 
 /**
  * Pure render helpers. They never mutate the sim.
@@ -26,7 +27,10 @@ export interface BlockRenderPos {
   row: number;
   /** Grid column incl. the swap offset. */
   col: number;
-  /** 0..1 through the match flash (1 once popping/popped, 0 otherwise). */
+  /**
+   * 0..1 through the match flash (1 once popping/popped, 0 otherwise). For garbage
+   * cells: 0..1 through the slab's conversion.
+   */
   flashProgress: number;
   /** 0 until the block pops, then 0..1 over `popTicksPerBlock` ticks. */
   popProgress: number;
@@ -43,7 +47,12 @@ export function blockRenderPos(sim: SimState, index: number): BlockRenderPos | n
   const col = b.state === 'swapping' ? gridCol - (b.swapDir * b.timer) / swapTicks : gridCol;
   let flashProgress = 0;
   let popProgress = 0;
-  if (b.group !== 0) {
+  if (b.slab !== 0) {
+    const slab = findSlab(sim, b.slab);
+    if (slab && slab.state === 'converting' && slab.convertTicks > 0) {
+      flashProgress = 1 - slab.timer / slab.convertTicks;
+    }
+  } else if (b.group !== 0) {
     const group = sim.groups.find((g) => g.id === b.group);
     const age = group ? group.age : 0;
     flashProgress = flashTicks > 0 ? Math.min(1, age / flashTicks) : 1;
@@ -75,4 +84,30 @@ export function dangerColumns(sim: SimState, rowsFromTop = 2): number[] {
   const result: number[] = [];
   for (let c = 0; c < tops.length; c++) if ((tops[c] as number) < rowsFromTop) result.push(c);
   return result;
+}
+
+export interface SlabRenderPos {
+  id: number;
+  /** Top row incl. fall progress (not incl. rise). */
+  row: number;
+  col: number;
+  width: number;
+  height: number;
+  state: GarbageSlab['state'];
+  /** 0..1 through the conversion flash (0 unless converting). */
+  convertProgress: number;
+}
+
+/** Render rectangles of every garbage slab (draw one framed slab per entry). */
+export function slabRenderPositions(sim: SimState): SlabRenderPos[] {
+  return sim.garbage.map((s) => ({
+    id: s.id,
+    row: s.row + (s.state === 'falling' ? s.fall / SUBUNITS_PER_CELL : 0),
+    col: s.col,
+    width: s.width,
+    height: s.height,
+    state: s.state,
+    convertProgress:
+      s.state === 'converting' && s.convertTicks > 0 ? 1 - s.timer / s.convertTicks : 0,
+  }));
 }

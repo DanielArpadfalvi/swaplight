@@ -15,6 +15,7 @@ import {
   stopTicksFor,
   type SimConfig,
 } from './config';
+import { flagSlabChain, garbageConverting, triggerGarbage, updateGarbage } from './garbage';
 import { applyGravity, type GravityResult } from './gravity';
 import { findMatches } from './match';
 import { createRng, type Seed } from './rng';
@@ -22,6 +23,7 @@ import { scoreClear, type ScoreModifier } from './scoring';
 import type {
   Block,
   CellRef,
+  GarbageSlab,
   MatchGroup,
   MatchedBlockInfo,
   SimEvent,
@@ -120,6 +122,10 @@ export function createSim(
     stats: { swaps: 0, matches: 0, blocksCleared: 0, maxCombo: 0, maxChain: 1, rowsRisen: 0 },
     gameOver: false,
     matchScanPending: true,
+    garbage: [],
+    garbageQueue: [],
+    nextSlabId: 1,
+    garbageDrops: 0,
   };
   generateInitialBoard(sim);
   sim.preview = generatePreviewRow(sim);
@@ -138,6 +144,22 @@ function cloneBlock(b: Block): Block {
     chain: b.chain,
     group: b.group,
     popIndex: b.popIndex,
+    slab: b.slab,
+  };
+}
+
+function cloneSlab(s: GarbageSlab): GarbageSlab {
+  return {
+    id: s.id,
+    row: s.row,
+    col: s.col,
+    width: s.width,
+    height: s.height,
+    state: s.state,
+    timer: s.timer,
+    convertTicks: s.convertTicks,
+    fall: s.fall,
+    chain: s.chain,
   };
 }
 
@@ -190,6 +212,19 @@ export function cloneSim(sim: SimState): SimState {
     },
     gameOver: sim.gameOver,
     matchScanPending: sim.matchScanPending,
+    garbage: sim.garbage.length === 0 ? [] : sim.garbage.map(cloneSlab),
+    garbageQueue:
+      sim.garbageQueue.length === 0
+        ? []
+        : sim.garbageQueue.map((q) => ({
+            id: q.id,
+            width: q.width,
+            height: q.height,
+            delay: q.delay,
+            fromChain: q.fromChain,
+          })),
+    nextSlabId: sim.nextSlabId,
+    garbageDrops: sim.garbageDrops,
   };
 }
 
@@ -200,7 +235,8 @@ let depth = 0;
 
 /**
  * Advance exactly one tick. Order within a tick:
- * 1. swap/landing timers  2. match groups (flash → pop → clear)  3. inputs
+ * 1. swap/landing timers  2. match groups (flash → pop → clear), garbage
+ * (landing/conversion timers, queue drop)  3. inputs
  * 4. gravity  5. match detection + scoring  6. chain bookkeeping
  * 7. rise / stop time / danger  8. level
  *
@@ -224,6 +260,7 @@ export function step(
     sim.tick++;
     updateTimers(sim, ended);
     updateGroups(sim, out, hooks);
+    if (sim.garbage.length > 0 || sim.garbageQueue.length > 0) updateGarbage(sim, out);
     for (const input of inputs) applyInput(sim, input, out);
     applyGravity(sim, out, gravity);
     if (sim.matchScanPending || ended.length > 0 || gravity.landed) {
@@ -288,9 +325,11 @@ function blocksSwapBelow(above: Block | null | undefined): boolean {
   return above.state === 'hovering' || (above.state === 'falling' && above.fall > 0);
 }
 
-/** Empty cells and resting blocks (idle/landing) can be swapped. */
+/** Empty cells and resting (idle/landing) non-garbage blocks can be swapped. */
 export function isSwappable(block: Block | null): boolean {
-  return block === null || block.state === 'idle' || block.state === 'landing';
+  return (
+    block === null || ((block.state === 'idle' || block.state === 'landing') && block.slab === 0)
+  );
 }
 
 /** Total rise progress in rows [0, 1) — for smooth rendering. */
@@ -337,7 +376,7 @@ function updateTimers(sim: SimState, ended: Block[]): void {
   const cells = sim.cells;
   for (let i = 0; i < cells.length; i++) {
     const b = cells[i];
-    if (!b || (b.state !== 'swapping' && b.state !== 'landing')) continue;
+    if (!b || (b.state !== 'swapping' && b.state !== 'landing') || b.slab !== 0) continue;
     b.timer--;
     if (b.timer > 0) continue;
     b.timer = 0;
@@ -414,6 +453,10 @@ function clearGroup(
     for (let i = index - cols; i >= 0; i -= cols) {
       const above = cells[i];
       if (!above || above.group !== 0) break;
+      if (above.slab !== 0) {
+        flagSlabChain(sim, above.slab);
+        break;
+      }
       above.chain = true;
       if (above.state === 'swapping') break;
       if (above.state === 'idle' || above.state === 'landing') {
@@ -459,6 +502,7 @@ function detectMatches(
     colors.push(block.color);
   }
   sim.groups.push(group);
+  if (sim.garbage.length > 0) triggerGarbage(sim, indices, events);
 
   const base = stopTicksFor(cfg, combo, chain);
   const stop = hooks.stopTicks
@@ -504,7 +548,7 @@ function updateChain(sim: SimState, events: SimEvent[] | null): void {
     if (b.state === 'idle' || b.state === 'landing') b.chain = false;
     else flagged = true;
   }
-  if (sim.chain > 1 && !flagged && sim.groups.length === 0) {
+  if (sim.chain > 1 && !flagged && sim.groups.length === 0 && !garbageConverting(sim)) {
     if (events) events.push({ type: 'chainEnd', length: sim.chain });
     sim.chain = 1;
   }
@@ -528,8 +572,9 @@ function updateRise(sim: SimState, events: SimEvent[] | null, hooks: SimHooks): 
     }
     setDanger(sim, false, events);
   }
-  // Clearing blocks freeze the stack entirely; raise presses are not latched meanwhile.
-  if (sim.groups.length > 0) return;
+  // Clearing blocks (and converting garbage) freeze the stack entirely; raise
+  // presses are not latched meanwhile.
+  if (sim.groups.length > 0 || (sim.garbage.length > 0 && garbageConverting(sim))) return;
   if (sim.raiseHeld) sim.manualRaising = true;
   const pinned = topRowOccupied(sim);
   // A raise only cancels stop time when the stack can actually rise.

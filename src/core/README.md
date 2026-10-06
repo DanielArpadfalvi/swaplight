@@ -12,7 +12,10 @@ Pure TypeScript, no DOM/Pixi, no `Math.random`/`Date.now`. A game is fully repro
 | `types.ts`      | `Block`, `BlockState`, `SimState`, `SimInput`, `SimEvent`, …                                              |
 | `board.ts`      | grid access, initial board + preview row generation, `pushRow`, `columnTops`                              |
 | `match.ts`      | `findMatches` (≥3 horizontal/vertical among resting blocks; reused scratch buffer)                        |
-| `gravity.ts`    | hover / fall / land pass                                                                                  |
+| `gravity.ts`    | hover / fall / land pass (blocks and garbage slabs)                                                       |
+| `garbage.ts`    | garbage slabs: `queueGarbage`, `placeGarbage`, drop / conversion (`updateGarbage`, `triggerGarbage`)      |
+| `versus.ts`     | attack table, `createVersus` / `stepVersus` lockstep exchange + cancel, versus replays                   |
+| `ai/`           | CPU opponent (levels 1–5): static grid model, amortized planner, controller – see "CPU" below             |
 | `hash.ts`       | `quickHash(sim)` – cheap 53-bit hash for AI / per-frame use                                               |
 | `view.ts`       | pure render helpers: `blockRenderPos`, `dangerColumns`                                                    |
 | `scoring.ts`    | `base × mult` pipeline of `ScoreModifier` hooks                                                           |
@@ -40,11 +43,12 @@ Engine-level modifier keys (absent = no effect): `swapLockUntil` – every swap 
 (exported as `MOD_SWAP_LOCK_UNTIL` / `MOD_LOCKED_COLUMNS`).
 
 Every `Block` has a `kind` (`'normal' | 'garbage' | 'wild' | 'bomb'`); the board only generates
-`normal` blocks (run charms/relics convert them). While a `wild` or `bomb` is on the board,
+`normal` blocks (run charms/relics convert them; garbage comes from `garbage.ts`). While a `wild` or `bomb` is on the board,
 `findMatches` takes a slower path: a **wild** is a joker – a run is a maximal line of ≥3 matchable
 blocks whose non-wild members share one color (`RRWGG` clears 5, `RWG` nothing, `WWW` clears); a
 matched **bomb** pulls every matchable block of its 3×3 neighbourhood into the same group (bombs
-caught in a blast detonate too), so a blast is one bigger combo. `garbage` still matches by color.
+caught in a blast detonate too), so a blast is one bigger combo. `garbage` never matches (see
+"Garbage" below).
 
 ## Coordinates
 
@@ -115,15 +119,100 @@ idle/landing ──match──▶ matched (flash 26) ──▶ popping ──▶
 - **Levels** (`endless` mode): `startLevel + ⌊tick / 1800⌋ + ⌊blocksCleared / 50⌋`, capped at 20.
 - **Modes**: `endless` (rise + levels) and `static` (no rise/levels – puzzles, tests).
 
+## Garbage
+
+Panel de Pon style slabs, `width × height` (versus sends 3–6 wide). State: `sim.garbage`
+(`GarbageSlab {id, row (top), col, width, height, state, timer, convertTicks, fall, chain}`),
+`sim.garbageQueue` (incoming, `QueuedGarbage {id, width, height, delay, fromChain}`), `nextSlabId`,
+`garbageDrops`. Each slab cell is a `Block` with `kind: 'garbage'` and `slab = slab id` (`slab` is 0
+for every other block); the slab record is authoritative and its state is mirrored into its cells
+(`converting` ↔ cell state `matched` with `group 0`), so per-cell rules (support, hover sync,
+`canSwap`'s "nothing hovering above") see garbage like any block. Garbage cells are never swappable
+and never match.
+
+- **Queue / drop**: `queueGarbage(sim, w, h, {delay, fromChain}, events?)` (emits `garbageQueued`).
+  The front entry drops when its delay is over, no chain is open and no group is clearing, and the
+  top rows over its columns are free: it appears at row 0 (`garbageDropped`) and falls. 6-wide
+  slabs take the full row; narrower ones alternate right / left. A slab taller than the free space
+  drops in parts (the rest stays queued). If row 0 is blocked it waits – meanwhile the stack is
+  pinned and the normal danger / grace / top-out rules apply (garbage resting in row 0 counts).
+- **Gravity**: a slab moves as a unit, processed when the bottom-up gravity scan reaches its
+  bottom-left cell: supported if it is on the bottom row or *any* cell under it is solid; resting
+  only on hovering / falling blocks it hovers / falls with them; with nothing under it it hovers
+  `hoverTicks` (or falls at once into cells vacated this tick), then falls at `fallSpeed` and lands
+  (`garbageLanded`, `landTicks` landing). Blocks on top ride along like on any block. A clear right
+  under a slab flags it `chain` (blocks riding it inherit the flag).
+- **Conversion**: a match orthogonally adjacent to a *resting* slab triggers it, and every resting
+  slab touching a triggered slab is triggered too (`garbageConverting {slabIds, ticks}`). Triggered
+  slabs flash for `min(garbageMaxConvertTicks, flashTicks + garbagePopTicks × cells)` (defaults 3 /
+  180); then the bottom row of each turns into random normal blocks with the chain flag (unsupported
+  ones start hovering) and the slab shrinks by a row or disappears (`garbageConverted {slabId,
+  blocks, remaining}`). The converted blocks can continue the chain. While any slab converts, rise
+  is frozen and the chain stays open.
+- `placeGarbage(sim, row, col, w, h)` puts a slab directly on the board (tests, puzzles, bosses).
+  `boardToAscii` prints garbage as `#`; `slabRenderPositions(sim)` (view.ts) gives one rectangle per
+  slab (incl. fall progress and `convertProgress`); `blockRenderPos(...).flashProgress` of a garbage
+  cell is its slab's conversion progress.
+
+## Versus (`versus.ts`)
+
+`createVersus(seed, sideA, sideB, rules?)` → plain-data `VersusState` with two sims (same board seed
+by default, `rules.sameBoards`). `stepVersus(vs, inputsA, inputsB, hooks?)` steps both sims, then
+exchanges garbage; returns `{events: [a, b], sent: [a, b]}` (`garbageQueued` events land in the
+receiver's list). When a side tops out the other wins (`winner`, both on one tick = `draw`); later
+steps are no-ops. `versusLeader(vs)` judges an unfinished match (net garbage, then stack height).
+
+- **Attack table**: one match of n ≥ 4 blocks sends `n−1` cells wide garbage at once (4→3, 5→4,
+  6→5, 7→6; larger combos split into balanced slabs ≤ cols: 8→3+4, 9→4+4, 13→6+6); a chain of
+  length n ≥ 2 sends one 6×(n−1) slab when it ends (`chainEnd`).
+- **Delay / preview**: sent garbage is queued on the receiver with `rules.attackDelay` (60 ticks);
+  the receiver's `sim.garbageQueue` is the "incoming" preview.
+- **Cancel** (`rules.cancel`, default on): a side's new attacks first eat its own incoming queue
+  (front first, whole entries or whole rows of a taller entry); only the rest is sent. Both sides
+  cancel against their pre-tick queues before anything is delivered, so A/B order never matters.
+- **Replays**: `stepVersusRecorded(vs, log, a, b)`, `replayVersus(seed, sideA, sideB, log)`,
+  `hashVersus(vs)`.
+
+## CPU (`ai/`)
+
+`createCpu(level 1–5, {seed, hooks})`, then each tick `inputs = cpuStep(cpu, sim)` *before*
+stepping that sim. Deterministic (own seeded RNG; work is budgeted in units, never wall time), so a
+CPU match replays from the versus input log.
+
+| level      | swaps/s | reaction | drag | 2-move setups | verified | mistakes | skill chains | raise below |
+| ---------- | ------- | -------- | ---- | ------------- | -------- | -------- | ------------ | ----------- |
+| 1 Easy     | 1.5     | 45 t     | 1    | –             | 2        | 30 %     | –            | 4           |
+| 2 Normal   | 2.5     | 28 t     | 2    | –             | 3        | 12 %     | –            | 5           |
+| 3 Hard     | 4       | 16 t     | 3    | 4             | 5        | 3 %      | –            | 6           |
+| 4 Expert   | 6       | 9 t      | 3    | 8             | 6        | –        | yes          | 7           |
+| 5 Insane   | 8       | 4 t      | 4    | 12            | 8        | –        | yes          | 7           |
+
+Loop: wait `reactionTicks` → `planSearch` (a generator resumed every tick until its per-tick work
+`budget` is used): (1) every single-block drag of 1..maxDrag swaps is applied to a static color grid
+(`ai/grid.ts`: instant gravity, chain = a match containing a block that fell) and scored by garbage
+sent, chain, clears, garbage touched, stack height / danger, bumpiness, holes and match potential;
+(2) the best non-clearing "setup" drags are combined with every second drag (2-move chains / vertical
+matches); (3) the best few candidates and a no-move baseline are re-checked with real rollouts on a
+`cloneSim` of the live board (silent `step`, swaps spaced `actionTicks` apart, until the board is
+calm) and the best real result is taken if it beats the baseline (Easy/Normal sometimes take a
+worse verified one). On a busy board (groups clearing), Expert/Insane plan on the projected board
+(clearing cells removed, blocks above fall with the chain flag) to extend the running chain ("skill
+chains"); lower levels wait for a calm board. Each planned swap is re-validated before it is issued
+(expected block ids + a one-tick probe step on a clone), so the CPU never sends a swap the sim
+would reject. With nothing worth doing on a calm, low stack it taps manual raise. Measured cost:
+≈0.01–0.2 ms per tick on average (`BENCH=1 npx vitest run tests/unit/core/ai.test.ts`);
+`AI_LONG=1` runs the longer strength checks (each level beats the one below in ≥ 6/8 matches).
+
 ## Tick order (`step`)
 
-1. swap / landing timers 2. match groups (flash → pop → clear, chain flags, `onClear`)
-3. inputs (in order) 4. gravity (bottom-up) 5. match detection + scoring (incl. blocks whose swap
+1. swap / landing timers 2. match groups (flash → pop → clear, chain flags, `onClear`), then
+garbage (landing / conversion timers, queue delays, drop) 3. inputs (in order) 4. gravity (bottom-up) 5. match detection + scoring (incl. blocks whose swap
 ended this tick) 6. chain-flag cleanup / `chainEnd` 7. rise, stop time, danger 8. level.
 
 Each `step` returns the events produced in that tick: `swapped`, `swapRejected`, `landed`,
 `matched`, `scored`, `popped` (with `index`/`size` for rising pop pitch), `cleared`, `chainEnd`,
-`rowRisen`, `danger`, `levelUp`, `gameOver`. After game over `step` is a no-op.
+`rowRisen`, `danger`, `levelUp`, `gameOver`, `garbageDropped`, `garbageLanded`,
+`garbageConverting`, `garbageConverted` (`garbageQueued` comes from `queueGarbage`). After game over `step` is a no-op.
 `step(sim, inputs, hooks, events)`: pass an array as `events` to collect into it, or `null` for
 silent mode (AI rollouts: no event objects are built, an empty frozen array is returned).
 

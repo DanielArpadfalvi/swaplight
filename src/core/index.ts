@@ -4,6 +4,8 @@ export * from './rng';
 export * from './board';
 export * from './match';
 export * from './gravity';
+export * from './garbage';
+export * from './versus';
 export * from './scoring';
 export * from './sim';
 export * from './replay';

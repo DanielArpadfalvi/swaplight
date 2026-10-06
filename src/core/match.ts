@@ -1,8 +1,8 @@
 import type { Block, SimState } from './types';
 
-/** Only resting blocks take part in matches. */
+/** Only resting non-garbage blocks take part in matches. */
 export function isMatchable(block: Block | null | undefined): block is Block {
-  return !!block && (block.state === 'idle' || block.state === 'landing');
+  return !!block && (block.state === 'idle' || block.state === 'landing') && block.slab === 0;
 }
 
 /** Reused scratch buffer (findMatches is called every tick in AI rollouts). */
@@ -135,7 +135,7 @@ function findMatchesSpecial(sim: SimState, extra: readonly Block[] | null): numb
 
 /** Color of a matchable block, or -1. */
 function colorOf(block: Block | null | undefined, extra: readonly Block[] | null): number {
-  if (!block) return -1;
+  if (!block || block.slab !== 0) return -1;
   if (block.state === 'idle' || block.state === 'landing') return block.color;
   if (extra !== null && extra.includes(block)) return block.color;
   return -1;

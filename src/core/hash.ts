@@ -1,9 +1,10 @@
-import type { BlockKind, BlockState, SimState } from './types';
+import type { BlockKind, BlockState, GarbageState, SimState } from './types';
 
 /**
  * Cheap non-cryptographic state hash for AI transposition tables and per-frame
  * change detection. Covers everything that affects future play (cells, preview,
- * groups, rise/stop/grace, rng, score, chain, level, flags, modifiers), but not
+ * groups, garbage slabs + queue, rise/stop/grace, rng, score, chain, level, flags,
+ * modifiers), but not
  * the frozen config, seed or stats. Order of `modifiers` keys does not matter.
  * Collisions are possible – use `hashState` (replay.ts) for replays and tests.
  */
@@ -17,6 +18,14 @@ const STATE_CODE: Readonly<Record<BlockState, number>> = {
   matched: 6,
   popping: 7,
   popped: 8,
+};
+
+const SLAB_CODE: Readonly<Record<GarbageState, number>> = {
+  idle: 1,
+  hovering: 2,
+  falling: 3,
+  landing: 4,
+  converting: 5,
 };
 
 const KIND_CODE: Readonly<Record<BlockKind, number>> = {
@@ -55,12 +64,25 @@ export function quickHash(sim: SimState): number {
     );
     mix(b.timer | (b.fall << 16));
     mix(b.group | (b.popIndex << 20));
+    if (b.slab !== 0) mix(b.slab);
   }
   for (const b of sim.preview) mix(b.id ^ (b.color << 24));
   for (const g of sim.groups) {
     mix(g.id);
     mix(g.size | (g.chain << 8) | (g.age << 16));
   }
+  for (const s of sim.garbage) {
+    mix(s.id);
+    mix(s.row | (s.col << 8) | (s.width << 16) | (s.height << 24));
+    mix(SLAB_CODE[s.state] | (s.chain ? 8 : 0) | (s.fall << 4) | (s.timer << 12));
+    mix(s.convertTicks);
+  }
+  for (const q of sim.garbageQueue) {
+    mix(q.id);
+    mix(q.width | (q.height << 8) | (q.fromChain ? 1 << 30 : 0));
+    mix(q.delay);
+  }
+  mix(sim.nextSlabId | (sim.garbageDrops << 20));
   const { rng } = sim;
   mix(rng.a);
   mix(rng.b);

@@ -1,5 +1,5 @@
 import { RISE_SCALE, SUBUNITS_PER_CELL } from './config';
-import type { SimState } from './types';
+import type { Block, SimState } from './types';
 
 /**
  * Structural invariants that must hold between steps. Returns a list of
@@ -18,6 +18,7 @@ export function checkInvariants(sim: SimState): string[] {
 
   const ids = new Set<number>();
   const groupCounts = new Map<number, number>();
+  const slabCounts = new Map<number, number>();
   const seen = (id: number, where: string) => {
     if (ids.has(id)) errors.push(`duplicate block id ${id} (${where})`);
     ids.add(id);
@@ -31,6 +32,13 @@ export function checkInvariants(sim: SimState): string[] {
       const at = `${r},${c}`;
       seen(b.id, at);
       if (b.color < 0 || b.color >= sim.config.colors) errors.push(`bad color at ${at}`);
+      if ((b.kind === 'garbage') !== (b.slab !== 0))
+        errors.push(`garbage kind/slab mismatch at ${at}`);
+      if (b.slab !== 0) {
+        slabCounts.set(b.slab, (slabCounts.get(b.slab) ?? 0) + 1);
+        if (b.group !== 0) errors.push(`garbage cell in a match group at ${at}`);
+        continue;
+      }
       const inGroup = b.state === 'matched' || b.state === 'popping' || b.state === 'popped';
       if (inGroup !== (b.group !== 0)) errors.push(`group/state mismatch at ${at}`);
       if (b.group !== 0) groupCounts.set(b.group, (groupCounts.get(b.group) ?? 0) + 1);
@@ -65,5 +73,75 @@ export function checkInvariants(sim: SimState): string[] {
     groupCounts.delete(g.id);
   }
   for (const id of groupCounts.keys()) errors.push(`blocks reference unknown group ${id}`);
+  checkGarbage(sim, errors, slabCounts);
   return errors;
+}
+
+const SLAB_CELL_STATE = {
+  idle: 'idle',
+  hovering: 'hovering',
+  falling: 'falling',
+  landing: 'landing',
+  converting: 'matched',
+} as const;
+
+function checkGarbage(sim: SimState, errors: string[], slabCounts: Map<number, number>): void {
+  const { rows, cols } = sim.config;
+  const slabIds = new Set<number>();
+  for (const s of sim.garbage) {
+    const name = `slab ${s.id}`;
+    if (slabIds.has(s.id)) errors.push(`duplicate ${name}`);
+    slabIds.add(s.id);
+    if (s.id >= sim.nextSlabId) errors.push(`${name} id >= nextSlabId`);
+    if (
+      s.width < 1 ||
+      s.height < 1 ||
+      s.row < 0 ||
+      s.col < 0 ||
+      s.row + s.height > rows ||
+      s.col + s.width > cols
+    ) {
+      errors.push(`${name} out of bounds`);
+      continue;
+    }
+    const count = slabCounts.get(s.id) ?? 0;
+    if (count !== s.width * s.height)
+      errors.push(`${name} has ${count}/${s.width * s.height} cells`);
+    slabCounts.delete(s.id);
+    const cellState = SLAB_CELL_STATE[s.state];
+    for (let r = s.row; r < s.row + s.height; r++) {
+      for (let c = s.col; c < s.col + s.width; c++) {
+        const b = sim.cells[r * cols + c];
+        if (!b || b.slab !== s.id) {
+          errors.push(`${name} cell ${r},${c} missing`);
+          continue;
+        }
+        if (b.state !== cellState || b.fall !== s.fall)
+          errors.push(`${name} cell ${r},${c} out of sync`);
+      }
+    }
+    if ((s.state === 'hovering' || s.state === 'converting') && s.timer <= 0) {
+      errors.push(`${name} ${s.state} timer`);
+    }
+    if (s.state !== 'falling' && s.fall !== 0) errors.push(`${name} fall progress`);
+    const bottom = s.row + s.height - 1;
+    if (bottom < rows - 1 && (s.state === 'idle' || s.state === 'landing')) {
+      let solid = false;
+      for (let c = s.col; c < s.col + s.width; c++) {
+        const b: Block | null | undefined = sim.cells[(bottom + 1) * cols + c];
+        if (b && b.state !== 'hovering' && b.state !== 'falling') solid = true;
+      }
+      if (!solid) errors.push(`floating ${s.state} ${name}`);
+    }
+  }
+  for (const id of slabCounts.keys()) errors.push(`cells reference unknown slab ${id}`);
+  const queueIds = new Set<number>();
+  for (const q of sim.garbageQueue) {
+    if (q.width < 1 || q.width > cols || q.height < 1 || q.delay < 0) {
+      errors.push(`bad queued garbage ${q.id}`);
+    }
+    if (queueIds.has(q.id) || slabIds.has(q.id)) errors.push(`duplicate garbage id ${q.id}`);
+    queueIds.add(q.id);
+    if (q.id >= sim.nextSlabId) errors.push(`queued garbage id ${q.id} >= nextSlabId`);
+  }
 }

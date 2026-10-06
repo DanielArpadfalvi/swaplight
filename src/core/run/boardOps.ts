@@ -4,12 +4,13 @@ import { STAGE_CHARM_CLEARED } from './keys';
 
 /**
  * Deterministic board edits for charms and relics. Only "free" blocks are touched:
- * not part of a match group and not mid-swap (so group/swap bookkeeping stays valid).
+ * not part of a match group, not mid-swap and not garbage (so group/swap/slab
+ * bookkeeping stays valid).
  * Every edit sets `matchScanPending`, so the next step re-scans the board.
  */
 
 export function isFree(block: Block | null | undefined): block is Block {
-  return !!block && block.group === 0 && block.state !== 'swapping';
+  return !!block && block.group === 0 && block.state !== 'swapping' && block.slab === 0;
 }
 
 /** Free *resting* block (idle/landing): safe to recolor or convert. */

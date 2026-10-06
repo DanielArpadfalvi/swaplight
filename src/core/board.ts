@@ -39,6 +39,7 @@ export function newBlock(sim: SimState, color: number, state: BlockState = 'idle
     chain: false,
     group: 0,
     popIndex: 0,
+    slab: 0,
   };
 }
 
@@ -130,6 +131,7 @@ export function pushRow(sim: SimState): void {
   sim.cells.splice(0, cols);
   for (const b of sim.preview) sim.cells.push(b);
   sim.preview = generatePreviewRow(sim);
+  for (const s of sim.garbage) s.row--;
   // Groups never clear during a rise in the sim, but keep their indices valid anyway.
   for (const g of sim.groups)
     for (let i = 0; i < g.cells.length; i++) g.cells[i] = (g.cells[i] as number) - cols;
