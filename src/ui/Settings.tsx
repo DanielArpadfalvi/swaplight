@@ -2,7 +2,8 @@ import { VERSION } from '../core/version';
 import { LANGUAGE_SETTINGS, type LanguageSetting, type Settings } from '../game/settings';
 import type { GameActions, GameUiState } from '../game/state';
 import { LANGUAGE_NAMES, t } from '../i18n';
-import { IconChevron } from './icons';
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from '../game/links';
+import { IconChevron, IconExternal } from './icons';
 import { Section, Sheet } from './Sheet';
 
 interface Props {
@@ -153,6 +154,21 @@ export function SettingsScreen({ state, actions, leaving, z }: Props) {
           testId="open-privacy"
           onClick={() => actions.openOverlay('privacy')}
         />
+        <a
+          class="row row-button row-link"
+          href={SUPPORT_MAILTO}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="contact-support"
+        >
+          <span class="row-text">
+            <span class="row-label">{t('settings.contact')}</span>
+            <span class="row-hint">{SUPPORT_EMAIL}</span>
+          </span>
+          <span class="row-chevron">
+            <IconExternal />
+          </span>
+        </a>
         <div class="row">
           <span class="row-label">{t('settings.version')}</span>
           <span class="row-value" data-testid="version">

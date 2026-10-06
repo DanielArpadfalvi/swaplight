@@ -72,6 +72,7 @@ export const en = {
     restoring: 'Restoring…',
     restoreFailed: 'Could not reach the store. Try again later.',
     credits: 'Credits',
+    contact: 'Contact support',
     privacy: 'Privacy policy',
     version: 'Version',
   },
