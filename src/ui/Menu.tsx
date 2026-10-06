@@ -23,6 +23,7 @@ export function MainMenu({ state, actions, leaving }: MenuProps) {
         <p class="tagline">{t('app.tagline')}</p>
       </header>
       <nav class="mode-list" aria-label={t('common.play')}>
+        {!state.tutorialDone && <TutorialBanner actions={actions} />}
         {MODES.map((mode, i) => (
           <Fragment key={mode.id}>
             <ModeCard mode={mode} index={i} state={state} actions={actions} />
@@ -118,6 +119,29 @@ function ModeCard({
           </span>
         </span>
       )}
+    </button>
+  );
+}
+
+/** First-launch offer until the tutorial is done. */
+function TutorialBanner({ actions }: { actions: GameActions }) {
+  return (
+    <button
+      type="button"
+      class="tut-banner accent-violet"
+      data-testid="tutorial-banner"
+      onClick={() => actions.startMode('tutorial')}
+    >
+      <span class="tut-banner-icon">
+        <ModeGlyph icon="tutorial" size={22} />
+      </span>
+      <span class="tut-banner-text">
+        <span class="tut-banner-title">{t('tutorial.bannerTitle')}</span>
+        <span class="tut-banner-body">{t('tutorial.bannerBody')}</span>
+      </span>
+      <span class="mode-go">
+        <IconPlay size={14} />
+      </span>
     </button>
   );
 }

@@ -116,7 +116,12 @@ describe('mode registry', () => {
     const daily: ModeDef = { ...getMode('daily')!, start: vi.fn() };
     expect(modeStatus(daily, false)).toBe('locked');
     expect(modeStatus(daily, true)).toBe('playable');
-    const host = { startEndless: vi.fn(), startRun: vi.fn() };
+    const host = {
+      startEndless: vi.fn(),
+      startRun: vi.fn(),
+      startPuzzles: vi.fn(),
+      startTutorial: vi.fn(),
+    };
     expect(startMode('daily', host, false, [daily])).toBe('locked');
     expect(daily.start).not.toHaveBeenCalled();
     expect(startMode('daily', host, true, [daily])).toBe('playable');
@@ -124,7 +129,12 @@ describe('mode registry', () => {
   });
 
   it('startMode runs the start function of playable modes only', () => {
-    const host = { startEndless: vi.fn(), startRun: vi.fn() };
+    const host = {
+      startEndless: vi.fn(),
+      startRun: vi.fn(),
+      startPuzzles: vi.fn(),
+      startTutorial: vi.fn(),
+    };
     expect(startMode('daily', host, true)).toBe('soon');
     expect(host.startEndless).not.toHaveBeenCalled();
     expect(startMode('run', host, false)).toBe('playable');

@@ -1,6 +1,9 @@
 import type { SimState } from '../core/types';
 import type { Overlay, Screen } from './nav';
+import type { PuzzleTestApi } from './puzzleMode';
 import type { RunTestApi } from './runMode';
+import type { GameUiState } from './state';
+import type { TutorialTestApi } from './tutorialMode';
 import type { SaveData } from './save';
 
 /** Test / debug hooks, exposed as `window.__swaplight` in dev builds or with `?test`. */
@@ -38,11 +41,15 @@ export interface SwaplightTestApi {
   renderFrames(n: number, dtMs?: number): void;
   /** Run-mode hooks (start a run with a seed / deck, force-win stages, shop, charms…). */
   run?: RunTestApi;
+  /** Puzzle-mode hooks (open by id, swap, solve with the stored solution). */
+  puzzle?: PuzzleTestApi;
+  /** Tutorial hooks (step control, scripted moves). */
+  tutorial?: TutorialTestApi;
 }
 
 export interface SwaplightStateSummary {
   screen: Screen;
-  mode: 'endless' | 'run';
+  mode: GameUiState['mode'];
   overlays: Overlay[];
   /** The on-screen RAISE button is held. */
   raiseButton: boolean;

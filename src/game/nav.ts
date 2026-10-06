@@ -15,7 +15,11 @@ export type Screen =
   | 'stageIntro'
   | 'stageResult'
   | 'shop'
-  | 'runEnd';
+  | 'runEnd'
+  // Puzzle mode (play reuses 'playing' / 'paused').
+  | 'puzzlePacks'
+  | 'puzzleLevels'
+  | 'puzzleResult';
 
 export type Overlay =
   'settings' | 'stats' | 'collection' | 'credits' | 'privacy' | 'exitConfirm' | 'abandonConfirm';
@@ -27,7 +31,8 @@ export function showsBoard(screen: Screen): boolean {
     screen === 'paused' ||
     screen === 'gameOver' ||
     screen === 'stageIntro' ||
-    screen === 'stageResult'
+    screen === 'stageResult' ||
+    screen === 'puzzleResult'
   );
 }
 
@@ -37,6 +42,8 @@ export type BackAction =
   | { type: 'resume' }
   | { type: 'toMenu' }
   | { type: 'toRunMap' }
+  | { type: 'toPuzzlePacks' }
+  | { type: 'toPuzzleLevels' }
   | { type: 'confirmExit' }
   | { type: 'none' };
 
@@ -55,6 +62,12 @@ export function backAction(screen: Screen, overlays: readonly Overlay[]): BackAc
       return { type: 'toMenu' };
     case 'stageIntro':
       return { type: 'toRunMap' };
+    case 'puzzlePacks':
+      return { type: 'toMenu' };
+    case 'puzzleLevels':
+      return { type: 'toPuzzlePacks' };
+    case 'puzzleResult':
+      return { type: 'toPuzzleLevels' };
     case 'stageResult':
       return { type: 'none' };
     case 'menu':

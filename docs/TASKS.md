@@ -31,8 +31,8 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 ## M5 – More modes
 - [ ] T5.1 Garbage blocks + Versus CPU (AI, 5 difficulties)
 - [ ] T5.2 Daily challenge (date seed + modifier)
-- [ ] T5.3 Puzzle mode + solver/validator + 4 packs × 30
-- [ ] T5.4 Interactive tutorial
+- [x] T5.3 Puzzle mode + solver/validator + 4 packs × 30
+- [x] T5.4 Interactive tutorial
 
 ## M6 – Meta & UI
 - [x] T6.1 Main menu, mode select, settings, pause

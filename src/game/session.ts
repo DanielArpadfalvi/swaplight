@@ -3,7 +3,7 @@ import type { SimEvent, SimInput, SimState } from '../core/types';
 import type { BoardGeometry } from '../input/geometry';
 import { GestureController } from '../input/gesture';
 import { KeyboardController } from '../input/keyboard';
-import { createSimView } from '../input/simView';
+import { createSimView, type SimView } from '../input/simView';
 
 /**
  * One Endless game: the sim plus its input controllers. Pure logic (no DOM / Pixi): the host binds
@@ -32,7 +32,21 @@ export class EndlessSession {
     private readonly getGeometry: () => BoardGeometry | null,
   ) {
     this.sim = createSim(seed, {}, 'endless');
-    const view = createSimView(() => this.sim);
+    const base = createSimView(() => this.sim);
+    // Modes with extra swap rules (Puzzle: only while settled) gate the controllers' swaps too,
+    // so a drag waits for a legal moment instead of emitting a swap that would be refused.
+    const view: SimView = {
+      get rows() {
+        return base.rows;
+      },
+      get cols() {
+        return base.cols;
+      },
+      blockAt: (row, col) => base.blockAt(row, col),
+      locate: (id) => base.locate(id),
+      canSwap: (row, col) => base.canSwap(row, col) && (this.swapGate?.(row, col) ?? true),
+      rowsRisen: () => base.rowsRisen(),
+    };
     this.gesture = new GestureController(view);
     this.keyboard = new KeyboardController(view);
   }
@@ -44,6 +58,16 @@ export class EndlessSession {
   /** Sim hooks passed to every step (Run stages: relics, curses…); none for Endless. */
   hooks: SimHooks | undefined = undefined;
 
+  /** Extra swap rule of the current mode (reset by `load`). */
+  swapGate: ((row: number, col: number) => boolean) | undefined = undefined;
+
+  /**
+   * Replaces the plain `step` of a tick (reset by `load`): the Puzzle / Tutorial modes route swaps
+   * through the puzzle runner (move budget, undo). Must advance the sim exactly one tick and
+   * collect its events into `events`.
+   */
+  stepper: ((inputs: readonly SimInput[], events: SimEvent[]) => void) | undefined = undefined;
+
   restart(seed: string): void {
     this.load(createSim(seed, {}, 'endless'));
   }
@@ -52,6 +76,8 @@ export class EndlessSession {
   load(sim: SimState, hooks?: SimHooks): void {
     this.sim = sim;
     this.hooks = hooks;
+    this.swapGate = undefined;
+    this.stepper = undefined;
     this.gesture.reset();
     this.gesture.takeCommands();
     this.gesture.takeUiEvents();
@@ -100,7 +126,8 @@ export class EndlessSession {
       this.raiseSent = raise;
     }
     this.events.length = 0;
-    step(this.sim, inputs, this.hooks, this.events);
+    if (this.stepper) this.stepper(inputs, this.events);
+    else step(this.sim, inputs, this.hooks, this.events);
     for (const e of this.events) this.eventCounts[e.type] = (this.eventCounts[e.type] ?? 0) + 1;
     return this.events;
   }

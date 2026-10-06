@@ -5,7 +5,14 @@ import type { Language } from '../i18n';
 import type { ModeId } from './modes';
 import type { CharmTargetKind, FinishedStage, RunResumePoint } from './runController';
 import type { Overlay, Screen } from './nav';
-import type { ModeStats } from './save';
+import type { ModeStats, PuzzleRecord } from './save';
+import {
+  INITIAL_PUZZLE_UI,
+  type PuzzleActions,
+  type PuzzleUiState,
+  type TutorialActions,
+  type TutorialUiState,
+} from './puzzleState';
 import { DEFAULT_SETTINGS, type Settings } from './settings';
 
 export type { Overlay, Screen } from './nav';
@@ -93,7 +100,15 @@ export interface SavedRunInfo {
 export interface GameUiState {
   screen: Screen;
   /** Which mode owns the playing / paused screens. */
-  mode: 'endless' | 'run';
+  mode: 'endless' | 'run' | 'puzzle' | 'tutorial';
+  /** Puzzle mode screens (pack select, level grid, play, result). */
+  puzzle: PuzzleUiState;
+  /** Solved puzzles (from the save). */
+  puzzleRecords: Record<string, PuzzleRecord>;
+  /** Interactive tutorial in progress. */
+  tutorial: TutorialUiState | null;
+  /** The tutorial was completed (or skipped through); hides the menu banner. */
+  tutorialDone: boolean;
   /** Current run (plain data, replaced on every change). */
   run: RunState | null;
   runHud: RunHudState | null;
@@ -167,6 +182,8 @@ export interface GameActions {
   back(): void;
   exitApp(): void;
   run: RunActions;
+  puzzle: PuzzleActions;
+  tutorial: TutorialActions;
 }
 
 /** Run-mode UI actions (see `runMode.ts`). */
@@ -205,6 +222,10 @@ export interface RunActions {
 export const INITIAL_UI_STATE: GameUiState = {
   screen: 'menu',
   mode: 'endless',
+  puzzle: INITIAL_PUZZLE_UI,
+  puzzleRecords: {},
+  tutorial: null,
+  tutorialDone: false,
   run: null,
   runHud: null,
   runRerollCost: 0,

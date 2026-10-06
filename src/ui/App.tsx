@@ -22,6 +22,17 @@ import {
 } from './run/RunScreens';
 import { ShopScreen } from './run/Shop';
 import './run/run.css';
+import {
+  PuzzleControls,
+  PuzzleHintCard,
+  PuzzleHud,
+  PuzzleLevelsScreen,
+  PuzzlePacksScreen,
+  PuzzleResultPanel,
+  SwapCoach,
+} from './puzzle/PuzzleScreens';
+import { TutorialLayer } from './puzzle/Tutorial';
+import './puzzle/puzzle.css';
 
 interface AppProps {
   store: Store<GameUiState>;
@@ -44,7 +55,10 @@ export function App({ store, actions }: AppProps) {
   const ms = rm ? 0 : 220;
   const screen = state.screen;
   const run = state.mode === 'run';
-  const endlessHud = !run && (screen === 'playing' || screen === 'paused' || screen === 'gameOver');
+  const inGame = screen === 'playing' || screen === 'paused';
+  const endlessHud = state.mode === 'endless' && (inGame || screen === 'gameOver');
+  const puzzleHud = state.mode === 'puzzle' && (inGame || screen === 'puzzleResult');
+  const tutorialHud = state.mode === 'tutorial' && inGame && state.tutorial !== null;
   const runHud =
     run &&
     (screen === 'playing' ||
@@ -67,8 +81,34 @@ export function App({ store, actions }: AppProps) {
       {endlessHud && <RaiseButton state={state} actions={actions} />}
       {runHud && <RunHud state={state} actions={actions} />}
       {runHud && screen !== 'stageResult' && <RunControls state={state} actions={actions} />}
+      {puzzleHud && <PuzzleHud state={state} actions={actions} />}
+      {puzzleHud && screen !== 'puzzleResult' && <PuzzleControls state={state} actions={actions} />}
+      {puzzleHud && screen === 'playing' && state.puzzle.highlight && (
+        <SwapCoach target={state.puzzle.highlight} testId="puzzle-highlight" />
+      )}
+      {puzzleHud && screen === 'playing' && <PuzzleHintCard state={state} actions={actions} />}
+      {tutorialHud && <TutorialLayer state={state} actions={actions} />}
+      {tutorialHud && state.tutorial?.kind === 'raise' && (
+        <RaiseButton state={state} actions={actions} />
+      )}
       <Presence when={screen === 'paused'} ms={ms}>
-        {(leaving) => <PausePanel run={run} actions={actions} leaving={leaving} />}
+        {(leaving) => (
+          <PausePanel
+            run={run}
+            puzzle={state.mode === 'puzzle'}
+            actions={actions}
+            leaving={leaving}
+          />
+        )}
+      </Presence>
+      <Presence when={screen === 'puzzlePacks'} ms={ms}>
+        {(leaving) => <PuzzlePacksScreen state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      <Presence when={screen === 'puzzleLevels'} ms={ms}>
+        {(leaving) => <PuzzleLevelsScreen state={state} actions={actions} leaving={leaving} />}
+      </Presence>
+      <Presence when={screen === 'puzzleResult'} ms={ms}>
+        {(leaving) => <PuzzleResultPanel state={state} actions={actions} leaving={leaving} />}
       </Presence>
       {screen === 'gameOver' && <GameOverPanel state={state} actions={actions} />}
       <Presence when={screen === 'runSetup'} ms={ms}>
@@ -250,10 +290,12 @@ function RaiseButton({ state, actions }: { state: GameUiState; actions: GameActi
 
 function PausePanel({
   run,
+  puzzle,
   actions,
   leaving,
 }: {
   run: boolean;
+  puzzle: boolean;
   actions: GameActions;
   leaving: boolean;
 }) {
@@ -285,6 +327,16 @@ function PausePanel({
           <IconSettings size={18} />
           {t('menu.settings')}
         </button>
+        {puzzle && (
+          <button
+            type="button"
+            class="btn btn-ghost"
+            data-testid="pause-puzzle-levels"
+            onClick={() => actions.puzzle.toLevels()}
+          >
+            {t('puzzle.allPuzzles')}
+          </button>
+        )}
         <button
           type="button"
           class="btn btn-ghost btn-quiet"

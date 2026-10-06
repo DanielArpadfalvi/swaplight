@@ -15,6 +15,8 @@ import { GameLoop } from './loop';
 import { startMode, type ModeHost } from './modes';
 import { backAction, popOverlay, pushOverlay, showsBoard, type Overlay } from './nav';
 import { recordGame } from './progress';
+import { createPuzzleMode, type BoardLayoutMode } from './puzzleMode';
+import { createTutorialMode } from './tutorialMode';
 import { createRunMode } from './runMode';
 import { SaveManager } from './save';
 import { EndlessSession } from './session';
@@ -69,6 +71,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     best: save.data.modes.endless?.best ?? 0,
     language: getLanguage(),
     unlocks: [...save.data.unlocks],
+    puzzleRecords: save.data.puzzles,
+    tutorialDone: save.data.tutorialDone,
   });
   save.subscribe((data) =>
     store.set({
@@ -76,6 +80,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       modeStats: data.modes,
       fullVersion: data.fullVersion,
       unlocks: data.unlocks,
+      puzzleRecords: data.puzzles,
+      tutorialDone: data.tutorialDone,
     }),
   );
 
@@ -124,7 +130,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
 
   let frozen = false;
   let gameOverTimer: number | undefined;
-  let layoutMode: 'endless' | 'run' = 'endless';
+  let layoutMode: BoardLayoutMode = 'endless';
 
   const relayout = (): void => {
     const { width, height } = scene.app.screen;
@@ -135,6 +141,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       bottomMargin: CONTROLS_HEIGHT,
       // The Run HUD adds the goal bar and the relic row.
       ...(layoutMode === 'run' ? { hudFraction: 0.235, minHud: 176, maxHud: 214 } : {}),
+      // Puzzle / tutorial boards never rise: no preview strip.
+      ...(layoutMode === 'static' ? { previewCells: 0 } : {}),
     });
     scene.setLayout(layout, cols);
     store.set({
@@ -148,7 +156,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   };
   relayout();
   scene.app.renderer.on('resize', relayout);
-  const setLayoutMode = (mode: 'endless' | 'run'): void => {
+  const setLayoutMode = (mode: BoardLayoutMode): void => {
     layoutMode = mode;
     relayout();
   };
@@ -252,7 +260,10 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       audio.setIntensity(intensity);
     }
     publish(sim);
-    if (store.get().mode === 'run') runMode.afterTick(events);
+    const mode = store.get().mode;
+    if (mode === 'run') runMode.afterTick(events);
+    else if (mode === 'puzzle') puzzleMode.afterTick(events);
+    else if (mode === 'tutorial') tutorialMode.afterTick(events);
     else if (sim.gameOver) enterGameOver();
   };
 
@@ -280,6 +291,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
   const startGame = (): void => {
     window.clearTimeout(gameOverTimer);
     if (store.get().mode === 'run') runMode.suspend();
+    leaveBoardModes();
     store.set({ mode: 'endless' });
     session.restart(nextSeed());
     setLayoutMode('endless');
@@ -334,8 +346,11 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     loop.pause();
     const sim = session.sim;
     const screen = store.get().screen;
+    leaveBoardModes();
     if (store.get().mode === 'run') {
       runMode.suspend();
+    } else if (store.get().mode === 'puzzle' || store.get().mode === 'tutorial') {
+      // Nothing to record.
     } else if ((screen === 'playing' || screen === 'paused') && !sim.gameOver) {
       if (sim.tick >= MIN_RECORDED_TICKS) recordCurrentGame();
     }
@@ -394,9 +409,42 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     toMenu: () => toMenu(),
   });
 
+  const boardModeHost = {
+    store,
+    save,
+    audio,
+    haptics: platform.haptics,
+    scene,
+    session,
+    loop,
+    isFrozen: () => frozen,
+    showToast: (text: string) => showToast(text),
+    setLayoutMode,
+    geometry,
+    resetBoard() {
+      scene.board.resetTracking();
+      scene.board.captureTick(session.sim);
+      scene.clearEffects();
+      loop.reset();
+      lastIntensity = -1;
+      publish(session.sim);
+      store.set({ scoreFlash: null, raiseHeld: false });
+    },
+  };
+  const puzzleMode = createPuzzleMode(boardModeHost);
+  const tutorialMode = createTutorialMode({ ...boardModeHost, toMenu: () => toMenu() });
+  /** Puzzle / tutorial cleanup when another flow takes over the board. */
+  function leaveBoardModes(): void {
+    const mode = store.get().mode;
+    if (mode === 'puzzle') puzzleMode.leave();
+    else if (mode === 'tutorial') tutorialMode.leave();
+  }
+
   const modeHost: ModeHost = {
     startEndless: () => startGame(),
     startRun: () => runMode.open(),
+    startPuzzles: () => puzzleMode.open(),
+    startTutorial: () => tutorialMode.open(),
   };
 
   const handleBack = (): void => {
@@ -418,6 +466,12 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
         break;
       case 'toRunMap':
         runMode.backToMap();
+        break;
+      case 'toPuzzlePacks':
+        puzzleMode.actions.toPacks();
+        break;
+      case 'toPuzzleLevels':
+        puzzleMode.backFromResult();
         break;
       case 'confirmExit':
         audio.uiTap();
@@ -500,6 +554,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       platform.lifecycle.exitApp();
     },
     run: runMode.actions,
+    puzzle: puzzleMode.actions,
+    tutorial: tutorialMode.actions,
   };
 
   bindPointerInput(scene.canvas, session.gesture, () => {
@@ -597,6 +653,8 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
       },
     };
     api.run = runMode.testApi;
+    api.puzzle = puzzleMode.testApi;
+    api.tutorial = tutorialMode.testApi;
     window.__swaplight = api;
   }
 }

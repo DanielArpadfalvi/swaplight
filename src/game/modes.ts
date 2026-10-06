@@ -23,6 +23,10 @@ export interface ModeHost {
   startEndless(): void;
   /** Open the Run mode (continue the saved run, or pick a deck for a new one). */
   startRun(): void;
+  /** Open the Puzzle mode (pack select). */
+  startPuzzles(): void;
+  /** Start the interactive tutorial. */
+  startTutorial(): void;
 }
 
 export interface ModeDef {
@@ -78,7 +82,9 @@ export const MODES: readonly ModeDef[] = [
     descKey: 'modes.puzzles',
     icon: 'puzzles',
     accent: 'green',
+    // Free with pack 1; packs 2–4 are gated inside the mode.
     access: 'free',
+    start: (host) => host.startPuzzles(),
   },
   {
     id: 'tutorial',
@@ -87,6 +93,7 @@ export const MODES: readonly ModeDef[] = [
     icon: 'tutorial',
     accent: 'violet',
     access: 'free',
+    start: (host) => host.startTutorial(),
   },
 ];
 
