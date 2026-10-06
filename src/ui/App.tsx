@@ -6,6 +6,7 @@ import { useFormat } from './format';
 import { IconPlay, IconSettings } from './icons';
 import { CollectionScreen, CreditsScreen, ExitDialog, PrivacyScreen } from './InfoScreens';
 import { MainMenu } from './Menu';
+import { PaywallScreen } from './Paywall';
 import { Presence } from './Presence';
 import { SettingsScreen } from './Settings';
 import { StatsScreen } from './Stats';
@@ -36,6 +37,7 @@ const OVERLAYS: readonly Overlay[] = [
   'privacy',
   'exitConfirm',
   'abandonConfirm',
+  'paywall',
 ];
 
 export function App({ store, actions }: AppProps) {
@@ -141,6 +143,8 @@ function renderOverlay(
       return <ExitDialog {...props} />;
     case 'abandonConfirm':
       return <AbandonDialog {...props} />;
+    case 'paywall':
+      return <PaywallScreen state={state} {...props} />;
   }
 }
 

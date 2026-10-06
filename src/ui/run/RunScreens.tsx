@@ -567,7 +567,16 @@ export function RunEndScreen({ state, actions, leaving }: Props) {
         {s.unlockedBrightness.map((level) => (
           <div class="unlock-banner" key={level} data-testid="unlock-banner">
             <strong>{t('run.unlockedBrightness', { level })}</strong>
-            {!state.fullVersion && <span>{t('run.unlockNeedsFull')}</span>}
+            {!state.fullVersion && (
+              <button
+                type="button"
+                class="unlock-banner-link"
+                data-testid="unlock-get-full"
+                onClick={() => actions.openPaywall('brightness')}
+              >
+                {t('run.unlockNeedsFull')}
+              </button>
+            )}
           </div>
         ))}
         <button

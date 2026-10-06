@@ -45,7 +45,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 - [ ] T7.3 CI workflows: Android AAB/APK, iOS build on macOS runner
 
 ## M8 – Monetization
-- [ ] T8.1 Purchases interface + mock + RevenueCat impl, entitlement gating, paywall, restore
+- [x] T8.1 Purchases interface + mock + RevenueCat impl, entitlement gating, paywall, restore
 
 ## M9 – Release prep
 - [ ] T9.1 Store listing EN/HU, generated screenshots, privacy policy, age-rating answers

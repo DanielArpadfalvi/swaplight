@@ -44,7 +44,11 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       - run: npm ci
-      - run: npx vite build
+      - name: Build web assets
+        env:
+          # RevenueCat public SDK key (optional; without it the build uses the mock store).
+          VITE_RC_API_KEY_ANDROID: ${{ secrets.VITE_RC_API_KEY_ANDROID }}
+        run: npx vite build
       - run: npx cap sync android
       - name: Build debug APK
         working-directory: android
@@ -113,7 +117,16 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       - run: npm ci
-      - run: npx vite build
+      - name: Build web assets
+        env:
+          # RevenueCat public SDK key. Without it the app falls back to the mock store, which
+          # must never ship: warn loudly.
+          VITE_RC_API_KEY_ANDROID: ${{ secrets.VITE_RC_API_KEY_ANDROID }}
+        run: |
+          if [ -z "$VITE_RC_API_KEY_ANDROID" ]; then
+            echo "::warning title=RevenueCat key missing::VITE_RC_API_KEY_ANDROID is not set - this build cannot sell the Full Version (mock store)."
+          fi
+          npx vite build
       - run: npx cap sync android
       - name: Decode upload keystore
         env:

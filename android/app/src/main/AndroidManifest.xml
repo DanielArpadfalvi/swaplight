@@ -39,4 +39,6 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- In-app purchases (Google Play Billing also merges this in; declared explicitly for clarity). -->
+    <uses-permission android:name="com.android.vending.BILLING" />
 </manifest>

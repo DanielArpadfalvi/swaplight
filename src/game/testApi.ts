@@ -1,4 +1,5 @@
 import type { SimState } from '../core/types';
+import type { PurchaseOutcome } from '../platform/purchases';
 import type { Overlay, Screen } from './nav';
 import type { RunTestApi } from './runMode';
 import type { SaveData } from './save';
@@ -38,6 +39,15 @@ export interface SwaplightTestApi {
   renderFrames(n: number, dtMs?: number): void;
   /** Run-mode hooks (start a run with a seed / deck, force-win stages, shop, charms…). */
   run?: RunTestApi;
+  /** MockPurchases controls (web builds only): simulate store outcomes and latency. */
+  purchases?: {
+    /** Outcome of the next purchase (then back to `purchased`). */
+    setNextOutcome(outcome: PurchaseOutcome): void;
+    setLatency(ms: number): void;
+    /** The store knows a purchase this install has not seen yet (for the restore flow). */
+    ownedElsewhere(): Promise<void>;
+    setFullVersion(value: boolean): Promise<void>;
+  };
 }
 
 export interface SwaplightStateSummary {

@@ -169,3 +169,110 @@ Ez frissíti a `resources/` forrásképeket, a natív ikon/splash méreteket (`a
 Play kiemelt kép 1024×500). Utána a `capacitor-assets` által átformázott
 `android/app/src/main/AndroidManifest.xml`-t érdemes visszaállítani (`git checkout` – tartalmilag
 nem változik).
+
+---
+
+## 5. Vásárlás: RevenueCat beállítása (Teljes verzió)
+
+A játék egyetlen egyszeri vásárlást árul: **Teljes verzió**, termékazonosító
+`swaplight_full_version` (nem fogyó / non-consumable), ami a RevenueCatben a **`full_version`**
+jogosultságot (entitlement) adja. A kód (`src/platform/purchasesRevenueCat.ts`) ezeket a neveket
+várja – pontosan így vedd fel őket.
+
+Hogyan működik: a natív build a RevenueCat Capacitor pluginnal beszél (anonim felhasználói
+azonosító, nincs bejelentkezés). A legutóbbi jogosultság-állapotot a készülék elmenti, így a
+megvett Teljes verzió **offline is** feloldva marad a következő indításkor; online a RevenueCat
+válasza az irányadó (pl. visszatérítés után újra zárol). Ha a buildben **nincs RevenueCat-kulcs**,
+vagy weben fut, a játék a teszt-boltot (`MockPurchases`) használja – ilyen buildet **nem szabad**
+kiadni, mert abban a vásárlás ingyenes. A release jobok ilyenkor figyelmeztetést írnak ki.
+
+### 5.1 Előfeltételek
+- App Store Connect: a **Paid Applications Agreement** elfogadva, adó- és bankadatok kitöltve
+  (*Business*). Enélkül a termék nem tölthető be.
+- Play Console: **fizetési profil** (merchant account) létrehozva, és legalább egy AAB feltöltve
+  (belső tesztre is elég, lásd 1.3) – addig a Console nem enged terméket létrehozni.
+
+### 5.2 Termék létrehozása a boltokban
+**App Store Connect** → Swaplight → *Monetization → In-App Purchases → +*
+1. Típus: **Non-Consumable**, Reference Name: „Full Version”, Product ID: `swaplight_full_version`.
+2. Ár: a 4,99 USD-nek megfelelő sáv (*Price Schedule*), elérhetőség: minden ország.
+3. Lokalizáció (EN + HU): megjelenő név „Full Version” / „Teljes verzió”, leírás pl. „Unlock all
+   decks, modes and puzzle packs.” / „Minden pakli, mód és fejtörőcsomag feloldása.”
+4. *Review Information*: képernyőkép a vásárlási lapról (a `tests/e2e/__screenshots__/paywall-en.png`
+   jó alap), megjegyzés a reviewernek: „Tap the banner on the main menu or any locked deck.”
+5. Opcionális: *Family Sharing* bekapcsolása (utólag nem kapcsolható ki!).
+6. Az első IAP-t **az app első beküldésével együtt** kell review-ra küldeni (a verzió oldalán
+   *In-App Purchases and Subscriptions* szekció → add hozzá).
+
+**Play Console** → Swaplight → *Monetize → Products → In-app products → Create product*
+1. Product ID: `swaplight_full_version`, név és leírás EN + HU, ár: 4,99 USD (a Console
+   átszámolja a helyi árakra, pl. Ft).
+2. *Save → Activate*.
+
+### 5.3 RevenueCat projekt
+1. app.revenuecat.com → regisztráció (az ingyenes szint bőven elég) → *Create new project*:
+   „Swaplight”.
+2. *Apps → + New → App Store*: név „Swaplight iOS”, Bundle ID `com.arpadfalvi.swaplight`.
+   - **In-App Purchase Key**: App Store Connect → *Users and Access → Integrations → In-App
+     Purchase → Generate* → töltsd le a `.p8`-at, és a Key ID + Issuer ID-vel együtt töltsd fel a
+     RevenueCatbe (ez más kulcs, mint a CI-hez használt App Store Connect API kulcs a 2.3-ban).
+   - *App Store Connect API* kulcs (opcionális): a termékek importálásához.
+3. *Apps → + New → Play Store*: név „Swaplight Android”, package `com.arpadfalvi.swaplight`.
+   - **Service account credentials**: a RevenueCat leírása szerint hozz létre egy Google Cloud
+     service accountot (vagy használd az 1.4-es projektet), engedélyezd a *Google Play Android
+     Developer API*-t és a *Google Play Developer Reporting API*-t, a Play Console-ban add meg
+     neki a **View app information**, **View financial data** és **Manage orders and subscriptions**
+     jogot, majd a JSON
+     kulcsot töltsd fel a RevenueCatbe. (A jogosultság érvényesülése akár 24–36 óra.)
+4. *Product catalog → Products → + New*: mindkét apphoz a `swaplight_full_version` termék.
+5. *Product catalog → Entitlements → + New*: identifier **`full_version`** → *Attach* → mindkét
+   termék.
+6. *Product catalog → Offerings*: a `default` offering (legyen **Current**) → *+ New package*:
+   identifier `$rc_lifetime` (Lifetime) → mindkét platform termékét rendeld hozzá. A játék a
+   current offeringből olvassa az árat; ha nincs offering, közvetlenül a termékazonosítóval kéri le.
+
+### 5.4 API kulcsok → GitHub secretek
+RevenueCat → *Project settings → API keys* → a két **Public app-specific API key**:
+
+| Név | Érték |
+|---|---|
+| `VITE_RC_API_KEY_IOS` | az App Store app kulcsa (`appl_…`) |
+| `VITE_RC_API_KEY_ANDROID` | a Play Store app kulcsa (`goog_…`) |
+
+Ezek *publikus* SDK-kulcsok (bekerülnek az appba), mégis secretként tároljuk, hogy a repóban ne
+legyenek. A workflow-k a `vite build` lépésnek adják át őket; ha hiányoznak, a debug/szimulátor
+build továbbra is lefut (teszt-bolttal), a release jobok pedig figyelmeztetnek.
+Helyi natív buildhez: `VITE_RC_API_KEY_ANDROID=goog_… npx vite build && npx cap sync`.
+
+### 5.5 Natív beállítások (ellenőrizve)
+- **Android**: a `com.android.vending.BILLING` engedélyt a Play Billing könyvtár is hozzáadja, a
+  `AndroidManifest.xml`-ben kifejezetten is szerepel. A plugin a `npx cap sync` után a gradle
+  fájlokban regisztrálva van.
+- **iOS**: StoreKithez **nem** kell entitlement-fájl vagy külön képesség – az In-App Purchase
+  minden explicit App ID-n alapból engedélyezett (2.1). A plugin Swift Package-ként kerül be
+  (`ios/App/CapApp-SPM/Package.swift`, a `cap sync` írja).
+- **Adatvédelmi címkék**: App Store *App Privacy* → „Purchases / Purchase History” – gyűjtött,
+  nem kapcsolódik a felhasználóhoz, nem követésre (RevenueCat); Play *Data safety* →
+  „Purchase history”, ugyanígy. Reklám- és követési azonosító nincs.
+
+### 5.6 Sandbox / teszt vásárlás
+**iOS (TestFlight)**: a TestFlight-buildek mindig sandboxban vásárolnak, pénz nem mozdul. Teszthez
+elég egy TestFlight-tesztelő Apple ID; tiszta lappal App Store Connect → *Users and Access →
+Sandbox → Test Accounts* fiókkal is lehet (iPhone: *Beállítások → App Store → Sandbox-fiók*).
+Visszaállítás teszt: töröld az appot, telepítsd újra → *Vásárlások visszaállítása*.
+
+**Android (belső teszt)**: Play Console → *Settings → License testing* → add hozzá a tesztelők
+Gmail-címét (*Licensed testers*), válaszd a „RESPOND_NORMALLY” módot. A belső tesztsávról
+telepített appban a fizetési lapon „Test card, always approves” / „…declines” / „slow test card”
+választható – az utóbbival a **függőben lévő** (pending) vásárlás is kipróbálható.
+A tesztvásárlás a Play Console *Order management* oldalán visszatéríthető (refund) – ezzel a
+visszavonás is tesztelhető: a játék a következő online indításkor újra zárol.
+
+**RevenueCat**: *Customers* oldalon látszik minden tesztvásárlás (sandbox kapcsolóval); a
+*Customer* lapon kézzel is adható/elvehető a `full_version` jogosultság (*Grant promotional
+entitlement*), így vásárlás nélkül is tesztelhető a feloldás.
+
+**Web / fejlesztés**: `npm run dev` alatt a teszt-bolt fut; `?test` paraméterrel a
+`window.__swaplight.purchases` hookokkal szimulálható a megszakítás, függőben lévő és sikertelen
+vásárlás (`setNextOutcome('cancelled' | 'pending' | 'failed')`) és a visszaállítás
+(`ownedElsewhere()`).
