@@ -122,8 +122,8 @@ describe('danger and top-out', () => {
     expect(sim.danger).toBe(false);
   });
 
-  it('grace refills once the top row is clear', () => {
-    const sim = simFromAscii(TOWER, { ...FAST, graceTicks: 60 }, 'endless');
+  it('grace refills only after the top row has been clear for graceRefillTicks', () => {
+    const sim = simFromAscii(TOWER, { ...FAST, graceTicks: 60, graceRefillTicks: 10 }, 'endless');
     run(sim, 20);
     expect(sim.grace).toBe(40);
     // Slide the top block off the tower: it hovers then falls down column 1.
@@ -131,15 +131,41 @@ describe('danger and top-out', () => {
     expect(ofType(ev, 'swapped')).toHaveLength(1);
     const after: SimEvent[] = [];
     for (let i = 0; i < sim.config.swapTicks + 1; i++) after.push(...step(sim));
-    expect(ofType(after, 'danger')).toEqual([{ type: 'danger', active: false, grace: 60 }]);
+    // Unpinned: danger ends at once, but grace is not refilled yet.
+    // (grace kept draining while the block was still swapping in row 0)
+    expect(ofType(after, 'danger')).toEqual([{ type: 'danger', active: false, grace: 36 }]);
+    expect(sim.grace).toBe(36);
+    expect(sim.graceClearTicks).toBeGreaterThan(0);
+    while (sim.graceClearTicks > 0) after.push(...step(sim));
     expect(sim.grace).toBe(60);
-    // The top block hovers in row 0 (rise blocked, no drain), falls, then rising resumes
-    // until the tower is pinned again and grace starts draining from full.
-    for (let i = 0; i < 40; i++) after.push(...step(sim));
+    // The top block falls, rising resumes until the tower is pinned again and
+    // grace starts draining from full.
+    let guard = 0;
+    while (!sim.danger && guard++ < 200) after.push(...step(sim));
     expect(ofType(after, 'rowRisen')).toHaveLength(1);
     expect(sim.gameOver).toBe(false);
+    expect(sim.grace).toBe(59);
+  });
+
+  it('briefly unpinning the stack does not refill grace', () => {
+    const sim = simFromAscii(TOWER, { ...FAST, graceTicks: 60, graceRefillTicks: 30 }, 'endless');
+    run(sim, 20);
+    step(sim, [{ type: 'swap', row: 0, col: 0 }]);
+    run(sim, sim.config.swapTicks + 1);
+    expect(sim.danger).toBe(false);
+    // The block falls and the stack re-pins (one row of rise) before the refill delay.
+    let guard = 0;
+    while (!sim.danger && guard++ < 200) step(sim);
     expect(sim.danger).toBe(true);
-    expect(sim.grace).toBeGreaterThan(40);
+    expect(sim.grace).toBeLessThan(60);
+  });
+
+  it('graceRefillTicks 0 refills immediately', () => {
+    const sim = simFromAscii(TOWER, { ...FAST, graceTicks: 60, graceRefillTicks: 0 }, 'endless');
+    run(sim, 20);
+    step(sim, [{ type: 'swap', row: 0, col: 0 }]);
+    const ev = run(sim, sim.config.swapTicks + 1);
+    expect(ofType(ev, 'danger')).toEqual([{ type: 'danger', active: false, grace: 60 }]);
   });
 
   it('holding raise while pinned neither raises nor loses faster', () => {

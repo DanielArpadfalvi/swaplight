@@ -7,6 +7,8 @@ export * from './gravity';
 export * from './scoring';
 export * from './sim';
 export * from './replay';
+export * from './hash';
+export * from './view';
 export * from './ascii';
 export * from './invariants';
 export * from './version';

@@ -37,6 +37,12 @@ export function checkInvariants(sim: SimState): string[] {
       if (b.state === 'hovering' && b.timer <= 0) errors.push(`hover timer at ${at}`);
       if (b.state === 'swapping' && b.timer <= 0) errors.push(`swap timer at ${at}`);
       if (b.state !== 'falling' && b.fall !== 0) errors.push(`fall progress at ${at}`);
+      if (b.state === 'falling' && b.fall > 0 && r < rows - 1) {
+        const below = sim.cells[(r + 1) * cols + c];
+        if (below && (below.state !== 'falling' || below.fall < b.fall)) {
+          errors.push(`falling block overlaps the block below at ${at}`);
+        }
+      }
       if ((b.state === 'idle' || b.state === 'landing') && r < rows - 1) {
         const below = sim.cells[(r + 1) * cols + c];
         if (!below) errors.push(`floating ${b.state} block at ${at}`);
@@ -53,6 +59,9 @@ export function checkInvariants(sim: SimState): string[] {
   for (const g of sim.groups) {
     const count = groupCounts.get(g.id) ?? 0;
     if (count !== g.size) errors.push(`group ${g.id} has ${count}/${g.size} blocks`);
+    if (g.cells.length !== g.size || g.cells.some((i) => sim.cells[i]?.group !== g.id)) {
+      errors.push(`group ${g.id} cell list mismatch`);
+    }
     groupCounts.delete(g.id);
   }
   for (const id of groupCounts.keys()) errors.push(`blocks reference unknown group ${id}`);

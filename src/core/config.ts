@@ -46,6 +46,11 @@ export interface SimConfig {
 
   /** Ticks the stack may be pinned against the ceiling before game over. */
   graceTicks: number;
+  /**
+   * Grace refills only after the top row has held no resting block for this many
+   * consecutive ticks (so briefly unpinning the stack does not reset the timer).
+   */
+  graceRefillTicks: number;
 
   startLevel: number;
   maxLevel: number;
@@ -90,6 +95,7 @@ export const DEFAULT_CONFIG: Readonly<SimConfig> = Object.freeze({
   chainStopPerLevel: 30,
 
   graceTicks: 120,
+  graceRefillTicks: 30,
 
   startLevel: 1,
   maxLevel: 20,

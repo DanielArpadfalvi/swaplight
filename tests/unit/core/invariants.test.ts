@@ -29,7 +29,19 @@ describe('checkInvariants', () => {
           b.group = 7;
         },
       ],
-      ['has 0/3 blocks', (s) => s.groups.push({ id: 3, size: 3, age: 0, chain: 1 })],
+      ['has 0/3 blocks', (s) => s.groups.push({ id: 3, size: 3, age: 0, chain: 1, cells: [] })],
+      [
+        'cell list mismatch',
+        (s) => s.groups.push({ id: 3, size: 0, age: 0, chain: 1, cells: [5] }),
+      ],
+      [
+        'overlaps the block below',
+        (s) => {
+          const r = cellAt(s, 10, 0)!;
+          r.state = 'falling';
+          r.fall = 4;
+        },
+      ],
       ['hover timer', (s) => (cellAt(s, 10, 0)!.state = 'hovering')],
       ['swap timer', (s) => (cellAt(s, 10, 0)!.state = 'swapping')],
       ['fall progress', (s) => (cellAt(s, 10, 0)!.fall = 3)],

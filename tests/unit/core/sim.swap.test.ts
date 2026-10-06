@@ -71,18 +71,42 @@ describe('swap', () => {
     expect(checkInvariants(sim)).toEqual([]);
   });
 
-  it('swapping a block under a hovering block catches it (lands without falling)', () => {
+  it('cannot swap under a hovering block (PdP: no catching); it falls instead', () => {
     const sim = simFromAscii('Y.....\nG.....\nRB....');
     swap(sim, 10, 0); // G moves right; Y hovers at (9,0)
     run(sim, sim.config.swapTicks);
     const y = cellAt(sim, 9, 0)!;
     expect(y.state).toBe('hovering');
-    expect(canSwap(sim, 10, 0)).toBe(null);
-    swap(sim, 10, 0); // G comes back under Y
-    run(sim, sim.config.hoverTicks);
-    expect(cellAt(sim, 9, 0)).toBe(y);
-    expect(['landing', 'idle']).toContain(y.state);
-    expect(boardToAscii(sim)).toBe('Y.....\nG.....\nRB....');
+    expect(canSwap(sim, 10, 0)).toBe('locked');
+    expect(ofType(swap(sim, 10, 0), 'swapRejected')[0]!.reason).toBe('locked');
+    settle(sim);
+    expect(boardToAscii(sim)).toBe('YG....\nRB....');
+  });
+
+  it('cannot swap a block sideways under a hovering block above the right-hand cell', () => {
+    const sim = simFromAscii('.Y....\nRG....\nBRB...');
+    swap(sim, 10, 1); // G moves right onto B; Y hovers at (9,1)
+    run(sim, sim.config.swapTicks);
+    expect(cellAt(sim, 9, 1)!.state).toBe('hovering');
+    expect(canSwap(sim, 10, 0)).toBe('locked');
+    expect(canSwap(sim, 10, 2)).toBe(null);
+  });
+
+  it('cannot swap into the cell below a block that is part-way through falling', () => {
+    const sim = simFromAscii('.R....\n......\n......\nG.....\nBY....', {
+      fallSpeed: 4,
+      hoverTicks: 0,
+    });
+    const r = cellAt(sim, 7, 1)!;
+    let checked = false;
+    for (let i = 0; i < 40 && !checked; i++) {
+      step(sim);
+      if (cellAt(sim, 9, 1) === r && r.fall > 0) {
+        expect(canSwap(sim, 10, 0)).toBe('locked');
+        checked = true;
+      }
+    }
+    expect(checked).toBe(true);
   });
 
   it('landing blocks can be swapped', () => {

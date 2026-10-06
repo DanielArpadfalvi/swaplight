@@ -16,9 +16,16 @@ import type { ScoreBreakdown } from './scoring';
 export type BlockState =
   'idle' | 'swapping' | 'hovering' | 'falling' | 'landing' | 'matched' | 'popping' | 'popped';
 
+/**
+ * Block kind. Only 'normal' blocks are generated today; the others are reserved
+ * for garbage / relic mechanics (matching ignores the kind for now).
+ */
+export type BlockKind = 'normal' | 'garbage' | 'wild' | 'bomb';
+
 export interface Block {
   /** Stable unique id (for render interpolation / audio). */
   id: number;
+  kind: BlockKind;
   /** Color index 0..colors-1. */
   color: number;
   state: BlockState;
@@ -28,7 +35,11 @@ export interface Block {
   fall: number;
   /** Direction the block is moving while swapping: +1 right, -1 left, 0 none. */
   swapDir: -1 | 0 | 1;
-  /** Chain flag: block is falling because a group below it cleared. */
+  /**
+   * Chain flag: block is falling because a group below it cleared. A swapping
+   * block keeps the flag ("propagates chaining") and hands it to the blocks
+   * above it when it starts hovering at the end of its swap.
+   */
   chain: boolean;
   /** Match group id (0 = none). */
   group: number;
@@ -43,7 +54,16 @@ export interface MatchGroup {
   age: number;
   /** Chain level credited to this clear (1 = not a chain link). */
   chain: number;
+  /** Member cell indices in pop order (reading order). Blocks of a group never move. */
+  cells: number[];
 }
+
+/**
+ * Plain-data run modifiers (relic / curse parameters). Serializable, cloned by
+ * `cloneSim` and included in both state hashes. Behaviour lives in `SimHooks`,
+ * which may read (and mutate) these values.
+ */
+export type SimModifiers = Record<string, number>;
 
 export type SimMode = 'endless' | 'static';
 
@@ -59,11 +79,14 @@ export interface SimStats {
 /**
  * Complete simulation state: plain data only (structuredClone / JSON safe).
  * Grid is row-major, row 0 = TOP, row rows-1 = bottom active row.
+ * `config` is frozen by `createSim` and shared by reference between clones.
  */
 export interface SimState {
   seed: Seed;
   mode: SimMode;
-  config: SimConfig;
+  config: Readonly<SimConfig>;
+  /** Relic / run parameters (plain numbers). */
+  modifiers: SimModifiers;
   /** Number of steps executed so far. */
   tick: number;
   rng: RngState;
@@ -87,6 +110,8 @@ export interface SimState {
   manualRaising: boolean;
   /** Remaining top-out grace ticks. */
   grace: number;
+  /** Consecutive ticks the top row has held no resting block (grace refills at graceRefillTicks). */
+  graceClearTicks: number;
   /** Stack pinned against the ceiling and grace is draining. */
   danger: boolean;
 
@@ -96,6 +121,12 @@ export interface SimState {
   level: number;
   stats: SimStats;
   gameOver: boolean;
+  /**
+   * A match scan is needed on the next detection pass even if no block became
+   * matchable through a swap/landing (set by row rise and board edits). Code that
+   * edits `cells` directly should set it (`loadAscii` does).
+   */
+  matchScanPending: boolean;
 }
 
 export type SimInput =

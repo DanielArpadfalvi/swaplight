@@ -30,6 +30,7 @@ export function emptyCells(rows: number, cols: number): (Block | null)[] {
 export function newBlock(sim: SimState, color: number, state: BlockState = 'idle'): Block {
   return {
     id: sim.nextBlockId++,
+    kind: 'normal',
     color,
     state,
     timer: 0,
@@ -129,6 +130,10 @@ export function pushRow(sim: SimState): void {
   sim.cells.splice(0, cols);
   for (const b of sim.preview) sim.cells.push(b);
   sim.preview = generatePreviewRow(sim);
+  // Groups never clear during a rise in the sim, but keep their indices valid anyway.
+  for (const g of sim.groups)
+    for (let i = 0; i < g.cells.length; i++) g.cells[i] = (g.cells[i] as number) - cols;
+  sim.matchScanPending = true;
 }
 
 /** Highest occupied row per column (rows if empty). Handy for render/AI. */

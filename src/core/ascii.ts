@@ -79,6 +79,7 @@ export function loadAscii(sim: SimState, text: string): void {
   sim.groups = [];
   sim.chain = 1;
   sim.stopTicks = 0;
+  sim.matchScanPending = true;
 }
 
 const STATE_MARKS: Record<BlockState, string> = {

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { boardToAscii, loadAscii } from '../../../src/core/ascii';
-import { cellAt, columnTops, generatePreviewRow, pushRow } from '../../../src/core/board';
+import {
+  cellAt,
+  columnTops,
+  forEachBlock,
+  generatePreviewRow,
+  pushRow,
+} from '../../../src/core/board';
 import { findMatches } from '../../../src/core/match';
 import { createSim } from '../../../src/core/sim';
 import { checkInvariants } from '../../../src/core/invariants';
@@ -76,5 +82,19 @@ describe('preview row / pushRow', () => {
     const sim = createSim('tops', {}, 'static');
     loadAscii(sim, 'R.....\nG....B');
     expect(columnTops(sim)).toEqual([10, 12, 12, 12, 12, 11]);
+  });
+});
+
+describe('forEachBlock', () => {
+  it('visits blocks in reading order with their positions', () => {
+    const sim = createSim('each', {}, 'static');
+    loadAscii(sim, 'R.....\nGB....');
+    const seen: [number, number, number][] = [];
+    forEachBlock(sim, (b, r, c) => seen.push([b.color, r, c]));
+    expect(seen).toEqual([
+      [0, 10, 0],
+      [1, 11, 0],
+      [2, 11, 1],
+    ]);
   });
 });
