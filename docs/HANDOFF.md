@@ -1,31 +1,86 @@
-# Swaplight – átadási jegyzet (folytatás másik Claude-fiókból)
+# Swaplight – átadási jegyzet (hideg indulás helyi munkamenetből)
 
-Utolsó frissítés: 2026-10-06. Ez a fájl ahhoz kell, hogy a fejlesztést egy **új Claude Code munkamenetben** (pl. személyes fiókból) zökkenőmentesen folytatni lehessen.
+Utolsó frissítés: 2026-10-06. Ez a fájl ahhoz kell, hogy egy **új (helyi) Claude Code munkamenet** előzmények nélkül fel tudja venni a fonalat. Ezt olvasd el először, utána: `CLAUDE.md`, `docs/TASKS.md`, `docs/PERF.md`, `docs/RELEASE.md`.
 
-## 1. Hol tart a projekt
+## 0. Röviden: hol tartunk
+
+- **Kód:** 1.0-ig gyakorlatilag kész. Minden mérföldkő M0–M8 ✅, M9-ből T9.1 ✅, T9.3 ✅, T9.2 (aláírt release pipeline) kész, de élesben még nem futott, mert hiányoznak a store-secretek.
+- **Legutóbbi munka – T3.3 perf pass:** ✅ kész, de **még nincs a `main`-en**. A `claude/ecstatic-wozniak-ni908x` ágon van (`e6e3981` + ez a handoff commit), pusholva. **Félkész munka nincs**, commitolatlan változás nincs.
+  - Tartalom: frame-profilozó hook + `npm run test:perf`; mód-indítási fagyás 327 → ~40 ms; nincs játék közbeni textúrafeltöltés; az AI-tick nem lépi túl a munkakeretét. Részletek: `docs/PERF.md`.
+- **Tesztek az ágon:** `npm run check` (691 unit) ✅ · `npm run test:e2e` (26) ✅ · `npm run test:perf` (5) ✅.
+- **Tulajdonos (Dani):** a Google Play fejlesztői fiók regisztrálva, a hitelesítés folyamatban; az Apple Developer Program a következő.
+
+### Nyitott döntések / ismert hibák
+1. **A perf pass átvezetése a `main`-re** – a tulajdonos jóváhagyására vár.
+2. **5-ös (insane) CPU tickenkénti munkakerete** (`src/core/ai/profiles.ts`, `budget: 1100`): gyenge telefonon a tervezési tickek kb. 1–2%-a kihagy egy frame-et. A keret csökkentése megoldaná, de kicsit gyengíti az AI-t (balanszkérdés, a tulajdonos dönt).
+3. **Valódi eszközön** még nincs ellenőrizve a GPU fill rate (sok additív glow-réteg) – a konténerben csak szoftveres WebGL van.
+4. Opcionális P3-ak a T9.3 QA-ból:
+   - az Endless tipp eltakarja a pontszám feliratát 360×640-en;
+   - a Szikra számláló ezres tagolás nélkül jelenik meg („1305”);
+   - HU „PONT” vs. „PONTSZÁM” felirat a Futam HUD-ban;
+   - a Kapcsolat sor ikonja jobbra igazodik;
+   - a „FŐELLENSÉGEK” fül 360 px-en kb. 9 px-re kicsinyedik.
+
+### Következő lépések sorrendben
+1. A tulajdonos jóváhagyásával **merge a `main`-re** a `claude/ecstatic-wozniak-ni908x` ágból, push, utána nézd meg a CI-t (CI + Android + iOS workflow; a CI már futtatja a `test:perf`-et is).
+2. **T9.2 élesítése**, amint megvannak a secretek (7. pont, `docs/RELEASE.md`):
+   - Android: upload key + az `ANDROID_*` secretek → első aláírt AAB → kézi feltöltés a Play Console-ba → zárt teszt (12 tesztelő × 14 nap – érdemes minél korábban indítani);
+   - iOS: ASC API kulcs + secretek → TestFlight.
+3. **RevenueCat** beállítása (`docs/RELEASE.md` 5. pont), amint mindkét boltban létezik az app; sandbox-vásárlás tesztje.
+4. **Valódi telefonos teszt** (gyengébb Android is):
+   - teljesítmény (GPU fill rate);
+   - döntés az insane CPU-keretről;
+   - Futam / Versus balansz.
+5. A P3-ak javítása, store-listázás véglegesítése, beküldés review-ra. Utána: következő projekt (Worms-szerű aszinkron artillery, `docs/market-research-2026-10.md` #2).
+
+### Helyi futtatás (nem a felhős konténer!)
+```bash
+git clone https://github.com/DanielArpadfalvi/swaplight.git && cd swaplight
+git checkout claude/ecstatic-wozniak-ni908x   # amíg nincs a main-en
+npm ci
+npx playwright install chromium               # helyben NINCS /opt/pw-browsers
+npm run check && npm run build && npm run test:e2e && npm run test:perf
+```
+- A `CLAUDE.md` „never run `playwright install`” szabálya **csak a felhős konténerre** vonatkozik. A `playwright.config.ts` automatikusan a Playwright saját Chromiumát használja, ha az telepítve van.
+- A `test:perf` számai gépfüggők. Valódi GPU-s gépen a `draw` fázis jóval gyorsabb lehet; a küszöbök regressziós őrök.
+- Natív build helyben is mehet (Android Studio / Xcode, `npx cap sync`), de a release buildeket a GitHub Actions készíti.
+
+### Projekt-dashboard (minden munkamenet frissítse)
+Élő dashboard: https://claude.ai/artifact/94fw4py1eoxCoL7aozTVBQ – az `ArtifactData` toollal (ToolSearch: `select:ArtifactData`).
+
+**Mikor frissíts:**
+- minden commit/push után;
+- agent indításakor és végeztekor;
+- kipipált feladatnál;
+- amikor a tulajdonostól inputra vársz.
+
+**Hogyan:** előbb olvasd ki a dokumentumot, és az írásnál az olvasott `version`-t add meg `if_version`-ként.
+
+- **`projects/swaplight`** (update; a meglévő name/repo/tagline/accent mezők maradjanak):
+  - `milestones`: a `docs/TASKS.md`-ből: `[{code, title, tasks:[{id, title, done}]}]`; a `[~]` nem kész;
+  - `agents`: `[{id, label, status}]`;
+  - `lastCommit`: `{sha, message, at}`;
+  - `needsInput`: `[{id, question, since}]`;
+  - `state`: `active` | `paused` | `done`;
+  - `updatedAt`.
+- **`feed/main`**: az `items` elejére egy `{at, project:"swaplight", kind:"commit"|"task"|"agent"|"milestone"|"input", text}` elem (egy magyar mondat); legfeljebb 40 elem.
+
+## 1. Mérföldkövek
 
 | Mérföldkő | Állapot |
 |---|---|
 | M0 Alapozás (Vite+TS+Pixi+Preact, lint, teszt, CI) | ✅ |
 | M1 Mag-motor (determinisztikus Panel de Pon-szerű szimuláció) | ✅ |
 | M2 Játszható prototípus (Végtelen mód) | ✅ |
-| M3 Játékélmény (effektek, procedurális hang/zene, haptika, perf pass) | ✅ |
+| M3 Játékélmény (effektek, procedurális hang/zene, haptika, perf pass) | ✅ (perf pass: a fenti ágon) |
 | M4 Futam mód (roguelite: 47 ereklye, 15 talizmán, bolt, 8 főellenség, 6 pakli, Fényerő 1–8) | ✅ |
 | M5 További módok (Versus CPU 5 szinttel, Napi kihívás, 120 fejtörő, Oktatás) | ✅ |
 | M6 Meta & UI (menü, beállítások, mentés, statisztika, gyűjtemény, EN/HU) | ✅ |
 | M7 Mobil héj (Capacitor Android/iOS, ikon, splash, CI natív build) | ✅ |
 | M8 Monetizáció (RevenueCat, „Teljes verzió” paywall) | ✅ |
-| M9 Kiadás-előkészítés | 🟡 T9.1 ✅ (store-szövegek, weboldal, screenshot-generátor) · T9.2 pipeline kész, élesben még nem futott (secretek hiányoznak) · T9.3 ✅ (utolsó QA-kör kész) |
+| M9 Kiadás-előkészítés | 🟡 T9.1 ✅ · T9.2 pipeline kész, élesben még nem futott (secretek hiányoznak) · T9.3 ✅ |
 
-Részletes feladatlista: `docs/TASKS.md`. Terv: `docs/PLAN.md`. Kiadási útmutató: `docs/RELEASE.md`.
-
-### Átadáskori állapot
-- Az átadáskor **nem futott semmi**: a T9.3 utolsó QA-kör kész, pusholva és átvezetve a `main`-re (679 unit + 26 e2e teszt zöld).
-- **Következő lépések** (új munkamenetben):
-  1. **T9.2 élesítése:** ha a secretek (lásd 7. pont) megvannak, első aláírt AAB és TestFlight build a GitHub Actions-ből (`android.yml` → release-aab, `ios.yml` → release), és a hibák javítása. Az iOS signed export még soha nem futott élesben – ha az unsigned archive + cloud signing nem megy, át kell állni signed archive-ra (`-allowProvisioningUpdates`), lásd `docs/RELEASE.md`.
-  2. Valódi telefonos tesztelés visszajelzései alapján finomhangolás (pl. Futam egyensúly, Versus szintek). Teljesítmény: a T3.3 perf pass kész (`docs/PERF.md`, `npm run test:perf`). Valódi eszközön még ellenőrizni kell a GPU fill rate-et, és dönteni kell az 5-ös CPU tickenkénti munkakeretéről (lásd `docs/PERF.md` → „Nyitva maradt”).
-  3. Opcionális P3-ak a legutóbbi QA-ból: Endless tipp eltakarja a pontszám feliratát 360×640-en az első másodpercekben; Szikra számláló ezres tagolás nélkül („1305”); HU „PONT” vs „PONTSZÁM” felirat a Futam HUD-ban; Kapcsolat sor ikonja jobbra igazodik; „FŐELLENSÉGEK” fül 360 px-en ~9 px-re kicsinyedik.
-  4. Ezután: következő projekt (Worms-szerű aszinkron artillery).
+Részletes feladatlista: `docs/TASKS.md`. Terv: `docs/PLAN.md`. Kiadási útmutató: `docs/RELEASE.md`. Teljesítmény: `docs/PERF.md`.
 
 ## 2. Repók és ágak
 
@@ -34,7 +89,7 @@ Részletes feladatlista: `docs/TASKS.md`. Terv: `docs/PLAN.md`. Kiadási útmuta
   - Fejlesztési ág eddig: `ccr-3e920ca6-l7gmzy` (az új munkamenet kaphat új ágat – ez rendben van, csak a végén merge-eld a `main`-re).
 - **Weboldal:** `DanielArpadfalvi/swaplight-site` (publikus, GitHub Pages: https://danielarpadfalvi.github.io/swaplight-site/). Forrása a játék repó `docs/site/` mappája; frissítés: másold át (vagy `scripts/publish-site.sh`, ha már létezik), commit, push.
 
-## 3. Folytatás személyes fiókból – lépések
+## 3. Folytatás felhős munkamenetből (claude.ai/code) – lépések
 
 1. **GitHub összekötése** a személyes Claude-fiókban: https://claude.ai/connect-github → ugyanazzal a GitHub-felhasználóval (`DanielArpadfalvi`).
 2. Ha kéri: **Claude GitHub App** telepítése a két repóra (`swaplight`, `swaplight-site`): https://github.com/apps/claude/installations/select_target
@@ -45,9 +100,9 @@ Részletes feladatlista: `docs/TASKS.md`. Terv: `docs/PLAN.md`. Kiadási útmuta
 ## 4. Kezdő prompt az új munkamenethez
 
 ```
-Folytasd a Swaplight mobiljáték fejlesztését. Olvasd el: CLAUDE.md, docs/HANDOFF.md,
-docs/PLAN.md, docs/TASKS.md, docs/RELEASE.md. Te vagy az orkesztrátor: a nyitott
-feladatokat (első a T9.3, ha nincs kész) végrehajtó agenteknek add ki, ellenőrizd
+Folytasd a Swaplight mobiljáték fejlesztését. Olvasd el: docs/HANDOFF.md (0. pont: állapot,
+nyitott döntések, következő lépések), CLAUDE.md, docs/TASKS.md, docs/PERF.md, docs/RELEASE.md.
+Te vagy az orkesztrátor: a nyitott feladatokat végrehajtó agenteknek add ki, ellenőrizd
 (npm run check, npm run build, npm run test:e2e, screenshotok átnézése), commitolj és
 pusholj minden elfogadott feladat után, mérföldkövenként vezesd át a main-re.
 Autonóm módon dolgozz, csak nagyon fontos döntésnél kérdezz. A cél a store-ba

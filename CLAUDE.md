@@ -2,6 +2,8 @@
 
 Neon panel-swap versus puzzle game with a roguelite run mode. Plan: `docs/PLAN.md` (Hungarian). Task list / status: `docs/TASKS.md`.
 
+**New session? Read `docs/HANDOFF.md` first** (current state, open decisions, next steps, local setup, project dashboard).
+
 ## Stack
 Vite + TypeScript (strict) · PixiJS v8 (gameplay canvas) · Preact (DOM UI overlay) · Capacitor (iOS/Android) · Vitest · Playwright.
 

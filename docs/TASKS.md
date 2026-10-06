@@ -19,7 +19,7 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done (verified by orchestrator)
 ## M3 – Game feel
 - [x] T3.1 Particles, glow filters, screen shake, chain popups
 - [x] T3.2 Procedural SFX (Web Audio) + generative music
-- [x] T3.3 Haptics hook via platform layer; reduced-motion setting; perf pass (60 FPS) – `docs/PERF.md`, `npm run test:perf`; open: insane-CPU per-tick budget, real-device GPU check
+- [x] T3.3 Haptics hook via platform layer; reduced-motion setting; perf pass (60 FPS) – `docs/PERF.md`, `npm run test:perf`; open: insane-CPU per-tick budget, real-device GPU check. Not yet on `main` (branch `claude/ecstatic-wozniak-ni908x`), see `docs/HANDOFF.md`
 
 ## M4 – Run mode
 - [x] T4.1 Stage goals + run structure (3 acts × 3 stages + boss), currency
