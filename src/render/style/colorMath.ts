@@ -28,13 +28,14 @@ export function rgbToHex({ r, g, b }: Rgb): number {
 
 /** Linear interpolation between two colors in sRGB space. `t` = 0 → a, 1 → b. */
 export function mixColor(a: number, b: number, t: number): number {
-  const ca = hexToRgb(a);
-  const cb = hexToRgb(b);
-  return rgbToHex({
-    r: ca.r + (cb.r - ca.r) * t,
-    g: ca.g + (cb.g - ca.g) * t,
-    b: ca.b + (cb.b - ca.b) * t,
-  });
+  // Allocation-free (called per sprite per frame for tints).
+  return (mixChannel(a, b, t, 16) << 16) | (mixChannel(a, b, t, 8) << 8) | mixChannel(a, b, t, 0);
+}
+
+function mixChannel(a: number, b: number, t: number, shift: number): number {
+  const x = (a >> shift) & 0xff;
+  const v = Math.round(x + (((b >> shift) & 0xff) - x) * t);
+  return v < 0 ? 0 : v > 255 ? 255 : v;
 }
 
 /** Mix toward the color's own luminance-equivalent gray (0 = unchanged, 1 = gray). */

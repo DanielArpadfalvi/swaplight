@@ -257,6 +257,8 @@ export interface CurseDef extends RunEffect {
   desc: string;
   /** Curse cannot appear when the deck already plays this many colors (Spectrum). */
   maxDeckColors?: number;
+  /** Earliest act whose boss may carry this curse (the harshest curses skip act 1). */
+  minAct?: number;
 }
 
 export interface DeckDef extends RunEffect {

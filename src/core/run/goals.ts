@@ -10,34 +10,43 @@ import type { GoalType, StageGoal, StageProgress, StageResult } from './types';
  * scale gently and get their pressure from the speed level instead.
  */
 export const GOAL_TUNING = Object.freeze({
-  /** Act 1, stage 1 score target at brightness 1. */
-  scoreBase: 700,
-  /** Score target factor per act (index = act − 1). */
-  actScale: [1, 2, 4] as readonly number[],
+  /**
+   * Stage-1 score target per act at brightness 1 (index = act − 1). Act 1 is tuned for a casual
+   * relic-less player (~550–600 points per 60 s); acts 2 and 3 need relic synergy / a build.
+   */
+  scoreByAct: [360, 1400, 2800] as readonly number[],
   /** Brightness ≥ 6: steeper act curve. */
-  steepActScale: [1, 2.5, 5.5] as readonly number[],
-  /** Score target factor per stage (index 3 = boss). */
-  stageScale: [1, 1.2, 1.4, 1.7] as readonly number[],
+  steepScoreByAct: [360, 1750, 3850] as readonly number[],
+  /** Score target factor per stage (index 3 = boss), per act. */
+  stageScale: [
+    [1, 1, 1.05, 1.4],
+    [1, 1.2, 1.4, 1.7],
+    [1, 1.2, 1.4, 1.7],
+  ] as readonly (readonly number[])[],
   /** scoreInTime limits in seconds per stage index. */
   scoreSeconds: [60, 60, 60, 75] as readonly number[],
-  blocksBase: 45,
-  blocksPerStage: 8,
-  blocksPerAct: 16,
+  /** clearBlocks: stage-1 target per act, + per stage index (per act). */
+  blocksByAct: [40, 61, 77] as readonly number[],
+  blocksPerStage: [3, 8, 8] as readonly number[],
   blocksSeconds: 90,
   surviveBaseSeconds: 40,
   survivePerStageSeconds: 5,
   survivePerActSeconds: 10,
-  /** Survive stages start this many levels higher ("elevated speed"). */
-  surviveLevelBonus: 4,
-  /** chainTarget: [chainLength, count at stage 0] per act; +1 count per stage index. */
+  /** Survive stages start this many levels higher ("elevated speed"), per act. */
+  surviveLevelBonus: [2, 4, 4] as readonly number[],
+  /**
+   * chainTarget: [chainLength, count at stage 0] per act; + ⌊stage × chainsPerStage⌋ (max +2).
+   */
   chainByAct: [
     [2, 1],
     [2, 3],
     [3, 1],
   ] as readonly (readonly [number, number])[],
+  chainsPerStage: [0, 1, 1] as readonly number[],
   chainSeconds: 90,
-  /** Starting speed level: 1 + levelPerAct·(act−1) + (stage ≥ 2 ? 1 : 0). */
+  /** Starting speed level: 1 + levelPerAct·(act−1) + (stage ≥ 2 ? lateStageLevel[act−1] : 0). */
   levelPerAct: 2,
+  lateStageLevel: [0, 1, 1] as readonly number[],
   /** Brightness ≥ 2: score ×, blocks × */
   dimScoreFactor: 1.15,
   dimBlocksFactor: 1.1,
@@ -61,13 +70,13 @@ export function makeGoal(
   const t = GOAL_TUNING;
   const a = Math.min(3, Math.max(1, act)) - 1;
   const s = Math.min(3, Math.max(0, stage));
-  const startLevel = 1 + t.levelPerAct * a + (s >= 2 ? 1 : 0);
+  const startLevel = 1 + t.levelPerAct * a + (s >= 2 ? (t.lateStageLevel[a] as number) : 0);
   const dim = brightness >= 2;
   switch (type) {
     case 'scoreInTime': {
-      const actScale = (brightness >= 6 ? t.steepActScale : t.actScale)[a] as number;
-      const raw =
-        t.scoreBase * actScale * (t.stageScale[s] as number) * (dim ? t.dimScoreFactor : 1);
+      const base = (brightness >= 6 ? t.steepScoreByAct : t.scoreByAct)[a] as number;
+      const stageScale = (t.stageScale[a] as readonly number[])[s] as number;
+      const raw = base * stageScale * (dim ? t.dimScoreFactor : 1);
       return {
         type,
         target: niceRound(raw),
@@ -78,7 +87,8 @@ export function makeGoal(
     }
     case 'clearBlocks': {
       const raw =
-        (t.blocksBase + t.blocksPerStage * s + t.blocksPerAct * a) * (dim ? t.dimBlocksFactor : 1);
+        ((t.blocksByAct[a] as number) + (t.blocksPerStage[a] as number) * s) *
+        (dim ? t.dimBlocksFactor : 1);
       return {
         type,
         target: Math.round(raw),
@@ -96,14 +106,14 @@ export function makeGoal(
         target: ticks,
         chainLength: 0,
         timeLimit: ticks,
-        startLevel: startLevel + t.surviveLevelBonus,
+        startLevel: startLevel + (t.surviveLevelBonus[a] as number),
       };
     }
     case 'chainTarget': {
       const [length, count] = t.chainByAct[a] as readonly [number, number];
       return {
         type,
-        target: count + Math.min(2, s),
+        target: count + Math.min(2, Math.floor(s * (t.chainsPerStage[a] as number))),
         chainLength: length,
         timeLimit: t.chainSeconds * TICKS_PER_SECOND,
         startLevel,

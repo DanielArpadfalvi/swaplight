@@ -36,8 +36,15 @@ export interface BlockRenderPos {
   popProgress: number;
 }
 
-/** Render position of the block at cell `index`, or null for an empty cell. */
-export function blockRenderPos(sim: SimState, index: number): BlockRenderPos | null {
+/**
+ * Render position of the block at cell `index`, or null for an empty cell. Pass `out` to fill
+ * (and return) a reused object instead of allocating one (per-frame rendering).
+ */
+export function blockRenderPos(
+  sim: SimState,
+  index: number,
+  out?: BlockRenderPos,
+): BlockRenderPos | null {
   const b = sim.cells[index];
   if (!b) return null;
   const { cols, swapTicks, flashTicks, popTicksPerBlock } = sim.config;
@@ -61,6 +68,18 @@ export function blockRenderPos(sim: SimState, index: number): BlockRenderPos | n
       const since = age - (flashTicks + b.popIndex * popTicksPerBlock);
       popProgress = popTicksPerBlock > 0 ? Math.min(1, Math.max(0, since / popTicksPerBlock)) : 1;
     }
+  }
+  if (out) {
+    out.id = b.id;
+    out.kind = b.kind;
+    out.color = b.color;
+    out.state = b.state;
+    out.chain = b.chain;
+    out.row = row;
+    out.col = col;
+    out.flashProgress = flashProgress;
+    out.popProgress = popProgress;
+    return out;
   }
   return {
     id: b.id,
