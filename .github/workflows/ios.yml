@@ -26,8 +26,8 @@ jobs:
   simulator:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -55,7 +55,7 @@ jobs:
           ditto -c -k --keepParent \
             "$RUNNER_TEMP/dd/Build/Products/Debug-iphonesimulator/App.app" \
             "swaplight-simulator-${BUILD_NUMBER}.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: swaplight-ios-simulator
           path: swaplight-simulator-*.zip
@@ -96,8 +96,8 @@ jobs:
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -162,7 +162,7 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
           cp "$RUNNER_TEMP"/export/*.ipa "swaplight-${MARKETING_VERSION}-${BUILD_NUMBER}.ipa"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: swaplight-ios-ipa
           path: swaplight-*.ipa

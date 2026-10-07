@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cellAt } from '../../../src/core/board';
-import { blockRenderPos, dangerColumns } from '../../../src/core/view';
+import { blockRenderPos, dangerColumns, hasDangerColumn } from '../../../src/core/view';
 import { run, simFromAscii, swap } from './helpers';
 
 describe('blockRenderPos', () => {
@@ -86,5 +86,18 @@ describe('dangerColumns', () => {
     expect(dangerColumns(sim)).toEqual([0, 1, 2]);
     expect(dangerColumns(sim, 1)).toEqual([1]);
     expect(dangerColumns(simFromAscii('R.....'))).toEqual([]);
+  });
+});
+
+describe('hasDangerColumn', () => {
+  it('agrees with dangerColumns without allocating', () => {
+    const tall = Array.from({ length: 11 }, () => 'R.G...');
+    const sim = simFromAscii(['.Y....', ...tall].join('\n'));
+    for (const rows of [0, 1, 2, 3]) {
+      expect(hasDangerColumn(sim, rows)).toBe(dangerColumns(sim, rows).length > 0);
+    }
+    const calm = simFromAscii('R.....');
+    expect(hasDangerColumn(calm)).toBe(false);
+    expect(hasDangerColumn(calm, 20)).toBe(dangerColumns(calm, 20).length > 0);
   });
 });

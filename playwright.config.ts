@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, defineConfig, devices } from '@playwright/test';
 
-const PORT = 4173;
+const PORT = Number(process.env.PW_PORT ?? 4173);
 
 /**
  * The cloud dev container ships a preinstalled Chromium under PLAYWRIGHT_BROWSERS_PATH
@@ -25,6 +25,7 @@ export default defineConfig({
   testIgnore: 'store-screens.spec.ts',
   outputDir: 'test-results',
   fullyParallel: true,
+  workers: process.env.CI ? undefined : 2,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',

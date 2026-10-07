@@ -1,7 +1,7 @@
 import { AudioEngine } from '../audio';
 import { cloneSim } from '../core/sim';
 import type { SimState } from '../core/types';
-import { dangerColumns } from '../core/view';
+import { hasDangerColumn } from '../core/view';
 import { t, initI18n, getLanguage, onLanguageChange, setLanguage } from '../i18n';
 import { bindKeyboardInput, bindPointerInput } from '../input/dom';
 import { geometryForSim, type BoardGeometry } from '../input/geometry';
@@ -349,7 +349,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     const events =
       mode === 'versus' ? versusMode.tick(performance.now()) : session.tick(performance.now());
     scene.board.captureTick(sim);
-    const nearTop = dangerColumns(sim).length > 0;
+    const nearTop = hasDangerColumn(sim);
     applyFeedback(
       feedbackForEvents(events, {
         tick: sim.tick,
@@ -379,7 +379,7 @@ export async function bootGame(stage: HTMLElement, uiRoot: HTMLElement): Promise
     onRender(alpha, dt) {
       const sim = session.sim;
       const hints = session.gesture.hints;
-      const danger = sim.danger ? 1 : dangerColumns(sim).length > 0 ? 0.35 : 0;
+      const danger = sim.danger ? 1 : hasDangerColumn(sim) ? 0.35 : 0;
       scene.render(
         sim,
         alpha,

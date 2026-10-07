@@ -130,3 +130,13 @@ export function slabRenderPositions(sim: SimState): SlabRenderPos[] {
       s.state === 'converting' && s.convertTicks > 0 ? 1 - s.timer / s.convertTicks : 0,
   }));
 }
+
+/** Allocation-free `dangerColumns(sim, rowsFromTop).length > 0` for per-frame / per-tick checks. */
+export function hasDangerColumn(sim: SimState, rowsFromTop = 2): boolean {
+  const { cols } = sim.config;
+  const rows = Math.min(rowsFromTop, sim.config.rows);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) if (sim.cells[r * cols + c]) return true;
+  }
+  return false;
+}

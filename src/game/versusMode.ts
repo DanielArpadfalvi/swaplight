@@ -5,7 +5,7 @@ import { riseFraction } from '../core/sim';
 import type { SimEvent, SimState } from '../core/types';
 import type { AttackSlab, VersusStepResult } from '../core/versus';
 import { attackCells } from '../core/versus';
-import { dangerColumns } from '../core/view';
+import { hasDangerColumn } from '../core/view';
 import { t } from '../i18n';
 import type { Haptics } from '../platform/types';
 import type { VersusLayout } from '../render/board/versusLayout';
@@ -144,7 +144,7 @@ export function createVersusMode(host: VersusModeHost): VersusMode {
     const o = match.opponent;
     const queue = garbageIcons(p);
     const oppQueue = garbageIcons(o);
-    const oppDanger = o.danger || dangerColumns(o).length > 0;
+    const oppDanger = o.danger || hasDangerColumn(o);
     const sent = match.vs.sides[0].stats.sent;
     const oppSent = match.vs.sides[1].stats.sent;
     const needsLeaveConfirm = match.needsLeaveConfirm;
