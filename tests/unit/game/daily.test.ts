@@ -23,7 +23,7 @@ import {
   officialAvailable,
 } from '../../../src/game/daily';
 import { createDefaultSave, sanitizeSave } from '../../../src/game/save';
-import { t } from '../../../src/i18n';
+import { setLanguage, t } from '../../../src/i18n';
 
 describe('daily dates', () => {
   it('formats local dates and shifts them across month / year ends', () => {
@@ -192,7 +192,9 @@ describe('daily bookkeeping', () => {
     expect(data.dailyStreak).toEqual({ current: 4, best: 4, last: '' });
   });
 
-  it('share text matches the requested format', () => {
+  it('share text matches the requested format', async () => {
+    // Pin English: the default follows the machine's locale (a Hungarian dev box got "Napi kihívás").
+    await setLanguage('en');
     expect(t('daily.shareText', { date: '2026-10-06', score: groupDigits(12340), streak: 3 })).toBe(
       'Swaplight Daily 2026-10-06 — 12 340 pts 🔥 streak 3',
     );
