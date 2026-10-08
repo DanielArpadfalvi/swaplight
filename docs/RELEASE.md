@@ -8,7 +8,7 @@ létrehozása: `APP-STORE-CHECKLIST.md`, `PLAY-STORE-CHECKLIST.md`.
 
 | Workflow | Mikor | Mit csinál | Kell hozzá secret? |
 |---|---|---|---|
-| **Android** `debug-apk` | minden push | debug APK → artifact + „android-debug-latest” pre-release | nem |
+| **Android** `debug-apk` | minden push | debug APK → artifact + „android-debug-latest” pre-release + Google Drive (*Mobile games/Swaplight.apk* felülírása) | a Drive-hoz igen (0. pont) |
 | **Android** `release-aab` | kézi indítás, push a `main`-re, `v*` tag | aláírt AAB → artifact; opcionálisan feltöltés Google Playre | igen (lent) |
 | **iOS** `simulator` | minden push | szimulátoros build (aláírás nélkül) → artifact, bizonyítja, hogy fordul | nem |
 | **iOS** `release` | kézi indítás, push a `main`-re, `v*` tag | aláírt IPA → artifact; feltöltés TestFlightra | igen (lent) |
@@ -22,6 +22,27 @@ futásszáma, így mindig nő. A megjelenő verzió `v1.2.3` tagnél `1.2.3`, eg
 
 **Secretek felvétele:** GitHub → a repó → *Settings → Secrets and variables → Actions → New
 repository secret*. (Vagy parancssorból: `gh secret set NÉV < fájl`.)
+
+---
+
+## 0. Debug APK Google Drive-ra (minden push)
+
+A `debug-apk` job minden push után felülírja a Drive-on a **Mobile games/Swaplight.apk** fájlt
+(fájl-ID: `1NAlTCgqpwzclLYG73372Oobum7Nkmfes`, a link nem változik). A fájl leírásában a
+build száma, az ág és a commit látszik. Több ág párhuzamos pusholásakor az utoljára elkészült
+build marad fent.
+
+Egyszeri beállítás:
+
+1. Google Cloud Console → egy projekt (lehet ugyanaz, mint a Play service accounté) →
+   *APIs & Services → Enable APIs* → **Google Drive API** bekapcsolása.
+2. *IAM & Admin → Service Accounts* → service account (meglévő is jó) → *Keys → Add key → JSON*.
+3. A Drive-on a `Swaplight.apk` fájlt oszd meg a service account e-mail-címével
+   (`…@….iam.gserviceaccount.com`) **szerkesztőként**. Elég a fájlt, nem kell az egész mappát.
+4. GitHub secret: `GDRIVE_SERVICE_ACCOUNT_JSON` = a JSON kulcsfájl teljes tartalma.
+
+Ha a fájlt egyszer kicseréled egy másikra, az új ID-t a `GDRIVE_APK_FILE_ID` repó-*variable*-ben
+add meg (*Settings → Secrets and variables → Actions → Variables*). A secret nélkül a lépés kimarad.
 
 ---
 
