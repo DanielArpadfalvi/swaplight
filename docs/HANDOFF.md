@@ -23,9 +23,10 @@ Részletes feladatlista: `docs/TASKS.md`. Terv: `docs/PLAN.md`. Kiadási útmuta
 - Az átadáskor **nem futott semmi**: a T9.3 utolsó QA-kör kész, pusholva és átvezetve a `main`-re (679 unit + 26 e2e teszt zöld).
 - **Következő lépések** (új munkamenetben):
   1. **T9.2 élesítése:** ha a secretek (lásd 7. pont) megvannak, első aláírt AAB és TestFlight build a GitHub Actions-ből (`android.yml` → release-aab, `ios.yml` → release), és a hibák javítása. Az iOS signed export még soha nem futott élesben – ha az unsigned archive + cloud signing nem megy, át kell állni signed archive-ra (`-allowProvisioningUpdates`), lásd `docs/RELEASE.md`.
-  2. Valódi telefonos tesztelés visszajelzései alapján finomhangolás (pl. Futam egyensúly, Versus szintek).
-  3. Opcionális P3-ak a legutóbbi QA-ból: Endless tipp eltakarja a pontszám feliratát 360×640-en az első másodpercekben; Szikra számláló ezres tagolás nélkül („1305”); HU „PONT” vs „PONTSZÁM” felirat a Futam HUD-ban; Kapcsolat sor ikonja jobbra igazodik; „FŐELLENSÉGEK” fül 360 px-en ~9 px-re kicsinyedik.
-  4. Ezután: következő projekt (Worms-szerű aszinkron artillery).
+  2. **⚠️ TEENDŐ – Drive APK feltöltés élesítése (2026-10-08):** az `android.yml` `debug-apk` jobja minden push után felülírná a Drive-on a *Mobile games/Swaplight.apk* fájlt, de amíg a `GDRIVE_SERVICE_ACCOUNT_JSON` secret hiányzik, a lépés kimarad. Teendő: Drive API bekapcsolása + service account JSON kulcs, a `Swaplight.apk` megosztása a service account e-mail-címével szerkesztőként, majd a secret felvétele. Részletek: `docs/RELEASE.md` 0. pont.
+  3. Valódi telefonos tesztelés visszajelzései alapján finomhangolás (pl. Futam egyensúly, Versus szintek).
+  4. Opcionális P3-ak a legutóbbi QA-ból: Endless tipp eltakarja a pontszám feliratát 360×640-en az első másodpercekben; Szikra számláló ezres tagolás nélkül („1305”); HU „PONT” vs „PONTSZÁM” felirat a Futam HUD-ban; Kapcsolat sor ikonja jobbra igazodik; „FŐELLENSÉGEK” fül 360 px-en ~9 px-re kicsinyedik.
+  5. Ezután: következő projekt (Worms-szerű aszinkron artillery).
 
 ## 2. Repók és ágak
 
@@ -83,4 +84,5 @@ Részletesen: `docs/RELEASE.md`, `docs/PLAY-STORE-CHECKLIST.md`, `docs/APP-STORE
 - Android upload keystore + GitHub secretek (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, opcionális `PLAY_SERVICE_ACCOUNT_JSON`).
 - App Store Connect API kulcs (Admin) + secretek (`ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8`, `APPLE_TEAM_ID`).
 - RevenueCat projekt + `VITE_RC_API_KEY_IOS`, `VITE_RC_API_KEY_ANDROID` secretek.
+- Google Drive debug APK feltöltéshez: `GDRIVE_SERVICE_ACCOUNT_JSON` secret + a `Swaplight.apk` megosztása a service accounttal (`docs/RELEASE.md` 0. pont).
 - A `swaplight.support@gmail.com` postafiók létrehozása (ha még nincs).
